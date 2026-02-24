@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Printh3D Lite — Login</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Estilos -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+
+    <!-- ===== TELA DE LOGIN ===== -->
+    <div class="login-wrapper">
+        <div class="login-card" id="login-card">
+
+            <!-- Logo / Marca -->
+            <div class="login-logo">
+                <div class="logo-icon-wrap"><i data-lucide="printer"></i></div>
+                <h1>Print<span>h3D</span></h1>
+                <p>Sistema de Gestão de Impressão 3D</p>
+            </div>
+
+            <!-- Formulário de Login -->
+            <form id="login-form" autocomplete="on">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email"
+                           placeholder="seu@email.com"
+                           required autofocus
+                           autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label for="login-password">Senha</label>
+                    <input type="password" id="login-password"
+                           placeholder="••••••••"
+                           required
+                           autocomplete="current-password">
+                </div>
+
+                <!-- Mensagem de erro -->
+                <div id="login-error" class="login-error"></div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i data-lucide="lock"></i> Entrar
+                </button>
+            </form>
+
+            <!-- Importar base de dados -->
+            <div class="login-footer">
+                <button class="btn btn-secondary" id="btn-import-db">
+                    <i data-lucide="upload"></i> Importar Base de Dados
+                </button>
+                <input type="file" id="file-import-login" accept=".xlsx,.xls" hidden>
+            </div>
+
+            <!-- Dica de acesso -->
+            <div class="login-info">
+                Acesso padrão:<br>
+                <strong>admin@printh3d.com</strong> / <strong>admin123</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== SCRIPTS ===== -->
+    <!-- SHA-256 para hash de senhas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    <!-- SheetJS para manipulação de Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Módulos do sistema -->
+    <script src="js/storage.js"></script>
+    <script src="js/auth.js"></script>
+
+    <script>
+        // Inicializa ícones Lucide
+        lucide.createIcons();
+
+        // Inicializa banco de dados (cria padrão se necessário)
+        Storage.init();
+
+        // Se já logado, redireciona para o sistema
+        if (Auth.isLoggedIn()) {
+            window.location.href = 'index.html';
+        }
+
+        // === Handler do formulário de login ===
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const email    = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const errorEl  = document.getElementById('login-error');
+
+            // Tenta login
+            const result = Auth.login(email, password);
+
+            if (result.success) {
+                // Sucesso — redireciona
+                window.location.href = 'index.html';
+            } else {
+                // Erro — mostra mensagem com animação shake
+                errorEl.textContent = result.message;
+                errorEl.style.display = 'block';
+
+                const card = document.getElementById('login-card');
+                card.style.animation = 'none';
+                card.offsetHeight; // Force reflow
+                card.style.animation = 'shake 0.5s ease';
+            }
+        });
+
+        // === Importar banco de dados ===
+        document.getElementById('btn-import-db').addEventListener('click', function() {
+            document.getElementById('file-import-login').click();
+        });
+
+        document.getElementById('file-import-login').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                await Storage.importExcel(file);
+                alert('Base de dados importada com sucesso!\nFaça login para continuar.');
+            } catch (err) {
+                alert('Erro ao importar: ' + err.message);
+            }
+
+            // Limpa input para permitir re-importação do mesmo arquivo
+            e.target.value = '';
+        });
+    </script>
+
+</body>
+</html>
