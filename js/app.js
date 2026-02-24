@@ -185,6 +185,8 @@ const App = (() => {
         document.getElementById('modal-body').innerHTML = bodyHtml;
         document.getElementById('modal-overlay').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+        // Re-render Lucide icons in dynamic content
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     function closeModal() {
