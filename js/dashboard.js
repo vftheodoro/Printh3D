@@ -108,8 +108,8 @@ const Dashboard = (() => {
                     {
                         label: 'Vendas (R$)',
                         data: Object.values(monthlyData).map(d => d.vendas),
-                        backgroundColor: 'rgba(56, 189, 248, 0.75)',
-                        borderColor: 'rgba(56, 189, 248, 1)',
+                        backgroundColor: 'rgba(99, 102, 241, 0.75)',
+                        borderColor: 'rgba(99, 102, 241, 1)',
                         borderWidth: 1,
                         borderRadius: 6,
                         borderSkipped: false
