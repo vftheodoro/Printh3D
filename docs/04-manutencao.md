@@ -19,6 +19,9 @@ A ordem correta de carregamento é crítica:
 8. dashboard.js
 9. app.js
 
+Observação:
+- Novas funcionalidades (clientes, gastos, lixeira) estão no fluxo já coberto por `database.js`, `storage.js` e `app.js`.
+
 ## 3. Ordem de scripts (login)
 
 1. database.js
@@ -33,7 +36,17 @@ Passos mínimos:
 3. Ajustar visual em index.html e css/style.css.
 4. Ajustar exportações (ZIP/XLSX) se necessário.
 
-## 5. Troubleshooting
+## 5. Adicionar novo domínio (ex.: gastos)
+
+Passos recomendados:
+1. Criar store em `database.js` (índices + export/import).
+2. Incluir no cache em `storage.js`.
+3. Criar seção no `index.html`.
+4. Implementar render/modal/CRUD em `app.js`.
+5. Atualizar KPIs em `dashboard.js` quando impactar indicadores.
+6. Atualizar README e docs.
+
+## 6. Troubleshooting
 
 ## Login não funciona
 - Verificar se login.html carrega database.js.
@@ -47,14 +60,21 @@ Passos mínimos:
 - Confirmar navegador/perfil usado.
 - Restaurar via backup ZIP/XLSX.
 
-## 6. Checklist antes de publicar
+## Item excluído por engano
+- Acessar aba Lixeira.
+- Restaurar item dentro de até 30 dias.
 
-- Validar CRUD de categorias, produtos, vendas, promoções e cupons.
+## 7. Checklist antes de publicar
+
+- Validar CRUD de categorias, produtos, vendas, clientes, gastos, promoções e cupons.
+- Validar fluxo de lixeira (restaurar/excluir definitivo).
 - Testar backup/restore.
 - Confirmar .gitignore cobrindo arquivos de dados.
+- Confirmar bloqueio de segredos (`.env*`, chaves e certificados).
+- Rodar `git status` e revisar mudanças antes de commit.
 - Revisar README e docs.
 
-## 7. Próximos passos recomendados
+## 8. Próximos passos recomendados
 
 - Testes automatizados (unitário e fluxo).
 - Pipeline de lint/build.
