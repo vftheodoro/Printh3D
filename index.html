@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Printh3D Lite — Gestão de Impressão 3D</title>
+    <title>Printh3D Pro — Gestão de Impressão 3D</title>
+    <link rel="icon" type="image/png" href="assets/images/logo_printh_azul.png">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,27 +19,35 @@
 </head>
 <body>
 
-    <div class="app-layout">
+    <!-- Loading overlay -->
+    <div id="app-loading" class="app-loading">
+        <div class="loading-spinner"></div>
+        <p>Carregando sistema...</p>
+    </div>
+
+    <div class="app-layout" id="app-layout" style="display:none;">
 
         <!-- ============================================
-             SIDEBAR — Menu lateral fixo
+             SIDEBAR
              ============================================ -->
         <nav class="sidebar" id="sidebar">
-
-            <!-- Marca -->
             <div class="sidebar-brand">
                 <div class="brand-icon"><img src="assets/images/logo_printh_branca.png" alt="Printh3D Logo" style="width: 32px; height: 32px;"></div>
                 <div class="brand-text">
                     <h2>Printh<span>3D</span></h2>
-                    <small>Lite Edition</small>
+                    <small>Pro Edition</small>
                 </div>
             </div>
 
-            <!-- Navegação -->
             <ul class="sidebar-nav">
                 <li class="active">
                     <a href="#" data-section="dashboard">
                         <i data-lucide="layout-dashboard"></i> Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-section="categories">
+                        <i data-lucide="folder"></i> Categorias
                     </a>
                 </li>
                 <li>
@@ -49,6 +58,11 @@
                 <li>
                     <a href="#" data-section="sales">
                         <i data-lucide="wallet"></i> Vendas
+                    </a>
+                </li>
+                <li class="admin-only">
+                    <a href="#" data-section="promotions">
+                        <i data-lucide="percent"></i> Promoções
                     </a>
                 </li>
                 <li>
@@ -79,18 +93,19 @@
                 </li>
             </ul>
 
-            <!-- Ações de import/export -->
             <div class="sidebar-footer">
-                <button class="btn btn-secondary" id="btn-export">
-                    <i data-lucide="download"></i> Exportar Backup
+                <button class="btn btn-secondary" id="btn-export-backup">
+                    <i data-lucide="download"></i> Backup Completo (ZIP)
+                </button>
+                <button class="btn btn-secondary" id="btn-export-excel">
+                    <i data-lucide="file-spreadsheet"></i> Exportar Excel
                 </button>
                 <button class="btn btn-secondary" id="btn-import-trigger">
                     <i data-lucide="upload"></i> Importar Dados
                 </button>
-                <input type="file" id="file-import" accept=".xlsx,.xls" hidden>
+                <input type="file" id="file-import" accept=".xlsx,.xls,.zip" hidden>
             </div>
 
-            <!-- Info do usuário logado -->
             <div class="sidebar-user">
                 <div class="user-avatar" id="user-avatar">A</div>
                 <div class="user-info">
@@ -98,18 +113,14 @@
                     <div class="user-role" id="user-display-role">Cargo</div>
                 </div>
             </div>
-
         </nav>
 
-        <!-- Backdrop mobile -->
         <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
         <!-- ============================================
-             ÁREA DE CONTEÚDO
+             CONTENT AREA
              ============================================ -->
         <div class="content-area">
-
-            <!-- Header fixo -->
             <header class="content-header">
                 <button class="btn-hamburger" id="sidebar-toggle"><i data-lucide="menu"></i></button>
                 <h2 id="page-title">Dashboard</h2>
@@ -118,15 +129,12 @@
                 </div>
             </header>
 
-            <!-- Conteúdo principal -->
             <main class="content-main">
 
                 <!-- ===================================
-                     SEÇÃO: DASHBOARD
+                     DASHBOARD
                      =================================== -->
                 <div id="section-dashboard" class="section active">
-
-                    <!-- KPI Cards -->
                     <div class="kpi-grid">
                         <div class="kpi-card">
                             <div class="kpi-icon"><i data-lucide="dollar-sign"></i></div>
@@ -163,62 +171,135 @@
                                 <span class="kpi-value" id="kpi-count">0</span>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Gráfico mensal -->
-                    <div class="chart-container">
-                        <h3><i data-lucide="trending-up"></i> Vendas × Lucro — Últimos 6 Meses</h3>
-                        <div class="chart-wrapper">
-                            <canvas id="chart-vendas"></canvas>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="percent"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Em Promoção</span>
+                                <span class="kpi-value" id="kpi-promos">0</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="alert-triangle"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Estoque Baixo</span>
+                                <span class="kpi-value" id="kpi-low-stock">0</span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Vendas Recentes -->
-                    <div class="card">
-                        <h3><i data-lucide="clock"></i> Vendas Recentes</h3>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Produto</th>
-                                    <th>Cliente</th>
-                                    <th>Valor</th>
-                                    <th>Data</th>
-                                </tr>
-                            </thead>
-                            <tbody id="recent-sales-body">
-                                <tr>
-                                    <td colspan="4" class="text-center text-muted" style="padding: 2rem;">
-                                        Nenhuma venda registrada ainda.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="dashboard-charts">
+                        <div class="chart-container">
+                            <h3><i data-lucide="trending-up"></i> Vendas × Lucro — Últimos 6 Meses</h3>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-vendas"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container chart-sm">
+                            <h3><i data-lucide="pie-chart"></i> Vendas por Categoria</h3>
+                            <div class="chart-wrapper chart-wrapper-sm">
+                                <canvas id="chart-categorias"></canvas>
+                            </div>
+                        </div>
                     </div>
 
+                    <div class="dashboard-row">
+                        <div class="card">
+                            <h3><i data-lucide="clock"></i> Vendas Recentes</h3>
+                            <table>
+                                <thead>
+                                    <tr><th>Produto</th><th>Cliente</th><th>Valor</th><th>Data</th></tr>
+                                </thead>
+                                <tbody id="recent-sales-body">
+                                    <tr><td colspan="4" class="text-center text-muted" style="padding:2rem;">Nenhuma venda registrada.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="card">
+                            <h3><i data-lucide="alert-triangle"></i> Alertas de Estoque</h3>
+                            <div id="stock-alerts">
+                                <p class="text-muted text-center" style="padding:2rem;">Nenhum alerta.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ===================================
-                     SEÇÃO: PRODUTOS
+                     CATEGORIAS
                      =================================== -->
-                <div id="section-products" class="section">
-
+                <div id="section-categories" class="section">
                     <div class="section-header">
-                        <h1><i data-lucide="package"></i> Produtos</h1>
-                        <button class="btn btn-primary" onclick="App.openProductModal()">
-                            + Novo Produto
+                        <h1><i data-lucide="folder"></i> Categorias</h1>
+                        <button class="btn btn-primary" onclick="App.openCategoryModal()">
+                            <i data-lucide="plus"></i> Nova Categoria
                         </button>
                     </div>
+                    <div id="categories-grid" class="categories-grid"></div>
+                </div>
 
-                    <div class="table-container">
+                <!-- ===================================
+                     PRODUTOS
+                     =================================== -->
+                <div id="section-products" class="section">
+                    <div class="section-header">
+                        <h1><i data-lucide="package"></i> Produtos</h1>
+                        <div style="display:flex;gap:0.5rem;">
+                            <button class="btn btn-secondary" id="btn-toggle-view" onclick="App.toggleProductView()" title="Alternar visualização">
+                                <i data-lucide="layout-grid"></i>
+                            </button>
+                            <button class="btn btn-primary" onclick="App.openProductModal()">
+                                <i data-lucide="plus"></i> Novo Produto
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Busca e Filtros -->
+                    <div class="products-toolbar">
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="product-search" placeholder="Buscar por nome, SKU, descrição, tags..." oninput="App.debounceProductSearch()">
+                        </div>
+                        <div class="filter-group">
+                            <label>Categoria</label>
+                            <select id="filter-category" onchange="App.filterProducts()">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Status</label>
+                            <select id="filter-status" onchange="App.filterProducts()">
+                                <option value="">Todos</option>
+                                <option value="ativo">Ativos</option>
+                                <option value="inativo">Inativos</option>
+                                <option value="promocao">Em Promoção</option>
+                                <option value="estoque_baixo">Estoque Baixo</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Ordenar</label>
+                            <select id="filter-sort" onchange="App.filterProducts()">
+                                <option value="nome">Nome</option>
+                                <option value="preco_venda">Preço</option>
+                                <option value="created_at">Data</option>
+                                <option value="quantidade_estoque">Estoque</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Vista tabela -->
+                    <div id="products-table-view" class="table-container">
                         <table>
                             <thead>
                                 <tr>
+                                    <th style="width:40px;"></th>
+                                    <th>SKU</th>
                                     <th>Nome</th>
-                                    <th>Peso</th>
-                                    <th>Tempo</th>
+                                    <th>Categoria</th>
                                     <th>Custo</th>
-                                    <th>Preço Venda</th>
+                                    <th>Preço</th>
+                                    <th>Promoção</th>
+                                    <th>Estoque</th>
                                     <th>Margem</th>
+                                    <th>Status</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -226,21 +307,21 @@
                         </table>
                     </div>
 
+                    <!-- Vista grid/cards -->
+                    <div id="products-grid-view" class="products-grid hidden"></div>
                 </div>
 
                 <!-- ===================================
-                     SEÇÃO: VENDAS
+                     VENDAS
                      =================================== -->
                 <div id="section-sales" class="section">
-
                     <div class="section-header">
                         <h1><i data-lucide="wallet"></i> Vendas</h1>
                         <button class="btn btn-primary" onclick="App.openSaleModal()">
-                            + Nova Venda
+                            <i data-lucide="plus"></i> Nova Venda
                         </button>
                     </div>
 
-                    <!-- Filtros -->
                     <div class="filters-bar">
                         <div class="filter-group">
                             <label>Data Início</label>
@@ -261,14 +342,12 @@
                         </button>
                     </div>
 
-                    <!-- Resumo -->
                     <div class="sales-summary" id="sales-summary">
                         <span>Total: <strong>R$ 0,00</strong></span>
                         <span>Lucro: <strong>R$ 0,00</strong></span>
                         <span>Registros: <strong>0</strong></span>
                     </div>
 
-                    <!-- Tabela de vendas -->
                     <div class="table-container">
                         <table>
                             <thead>
@@ -277,21 +356,92 @@
                                     <th>Produto</th>
                                     <th>Cliente</th>
                                     <th>Valor</th>
+                                    <th>Desconto</th>
                                     <th>Lucro</th>
+                                    <th>Cupom</th>
                                     <th>Vendedor</th>
                                 </tr>
                             </thead>
                             <tbody id="sales-body"></tbody>
                         </table>
                     </div>
-
                 </div>
 
                 <!-- ===================================
-                     SEÇÃO: CALCULADORA AVANÇADA
+                     PROMOÇÕES (ADMIN)
+                     =================================== -->
+                <div id="section-promotions" class="section admin-only">
+                    <div class="section-header">
+                        <h1><i data-lucide="percent"></i> Promoções e Cupons</h1>
+                    </div>
+
+                    <!-- Sub-navegação -->
+                    <div class="sub-tabs">
+                        <button class="sub-tab active" data-subtab="promos" onclick="App.switchPromoTab('promos')">
+                            <i data-lucide="tag"></i> Promoções por Produto
+                        </button>
+                        <button class="sub-tab" data-subtab="coupons" onclick="App.switchPromoTab('coupons')">
+                            <i data-lucide="ticket"></i> Cupons de Desconto
+                        </button>
+                    </div>
+
+                    <!-- Tab: Promoções -->
+                    <div id="subtab-promos" class="subtab-content active">
+                        <div class="section-header" style="margin-top:1rem;">
+                            <h3>Promoções Ativas e Agendadas</h3>
+                            <button class="btn btn-primary" onclick="App.openPromotionModal()">
+                                <i data-lucide="plus"></i> Nova Promoção
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Produto</th>
+                                        <th>Preço Original</th>
+                                        <th>Desconto</th>
+                                        <th>Preço Promo</th>
+                                        <th>Período</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="promotions-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tab: Cupons -->
+                    <div id="subtab-coupons" class="subtab-content">
+                        <div class="section-header" style="margin-top:1rem;">
+                            <h3>Cupons de Desconto</h3>
+                            <button class="btn btn-primary" onclick="App.openCouponModal()">
+                                <i data-lucide="plus"></i> Novo Cupom
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Tipo</th>
+                                        <th>Desconto</th>
+                                        <th>Validade</th>
+                                        <th>Usos</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="coupons-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===================================
+                     CALCULADORA AVANÇADA
                      =================================== -->
                 <div id="section-calculator" class="section">
-
                     <div class="section-header">
                         <h1><i data-lucide="calculator"></i> Calculadora de Custo</h1>
                         <div style="display:flex;gap:0.5rem;">
@@ -305,67 +455,42 @@
                     </div>
 
                     <div class="calc-layout">
-
-                        <!-- COLUNA ESQUERDA: Inputs -->
                         <div class="calc-inputs">
-
-                            <!-- 1️⃣ DADOS FÍSICOS -->
                             <div class="card calc-card">
                                 <h3><i data-lucide="ruler"></i> 1. Dados Físicos da Peça</h3>
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label>Comprimento do Filamento (m)</label>
-                                        <input type="number" id="adv-comprimento" step="0.01" min="0" placeholder="Ex: 15.5"
-                                               oninput="App.calcAdvanced()">
+                                        <input type="number" id="adv-comprimento" step="0.01" min="0" placeholder="Ex: 15.5" oninput="App.calcAdvanced()">
                                         <small>Comprimento usado de filamento em metros</small>
                                     </div>
                                     <div class="form-group">
                                         <label>Diâmetro do Filamento (mm)</label>
-                                        <input type="number" id="adv-diametro" step="0.01" min="0" value="1.75" placeholder="1.75"
-                                               oninput="App.calcAdvanced()">
+                                        <input type="number" id="adv-diametro" step="0.01" min="0" value="1.75" placeholder="1.75" oninput="App.calcAdvanced()">
                                         <small>Padrão: 1.75mm (FDM comum)</small>
                                     </div>
                                     <div class="form-group">
                                         <label>Densidade do Material (g/cm³)</label>
-                                        <input type="number" id="adv-densidade" step="0.01" min="0" value="1.24" placeholder="1.24"
-                                               oninput="App.calcAdvanced()">
+                                        <input type="number" id="adv-densidade" step="0.01" min="0" value="1.24" placeholder="1.24" oninput="App.calcAdvanced()">
                                         <small>PLA ≈ 1.24 · ABS ≈ 1.04 · PETG ≈ 1.27</small>
                                     </div>
                                     <div class="form-group">
                                         <label>Tempo de Impressão (minutos)</label>
-                                        <input type="number" id="adv-tempo-min" step="1" min="0" placeholder="Ex: 180"
-                                               oninput="App.calcAdvanced()">
+                                        <input type="number" id="adv-tempo-min" step="1" min="0" placeholder="Ex: 180" oninput="App.calcAdvanced()">
                                         <small>Tempo total estimado em minutos</small>
                                     </div>
                                 </div>
 
-                                <!-- Cálculos intermediários exibidos -->
                                 <div class="calc-steps" id="calc-steps-fisicos">
                                     <div class="calc-step-title"><i data-lucide="bar-chart-3"></i> Cálculos Intermediários</div>
-                                    <div class="calc-step-row">
-                                        <span>Raio do filamento</span>
-                                        <span id="step-raio">—</span>
-                                    </div>
-                                    <div class="calc-step-row">
-                                        <span>Área da seção (mm² → cm²)</span>
-                                        <span id="step-area">—</span>
-                                    </div>
-                                    <div class="calc-step-row">
-                                        <span>Volume de filamento</span>
-                                        <span id="step-volume">—</span>
-                                    </div>
-                                    <div class="calc-step-row highlight">
-                                        <span><i data-lucide="scale"></i> Peso estimado</span>
-                                        <span id="step-peso">—</span>
-                                    </div>
-                                    <div class="calc-step-row">
-                                        <span>Tempo convertido</span>
-                                        <span id="step-tempo-h">—</span>
-                                    </div>
+                                    <div class="calc-step-row"><span>Raio do filamento</span><span id="step-raio">—</span></div>
+                                    <div class="calc-step-row"><span>Área da seção (mm² → cm²)</span><span id="step-area">—</span></div>
+                                    <div class="calc-step-row"><span>Volume de filamento</span><span id="step-volume">—</span></div>
+                                    <div class="calc-step-row highlight"><span><i data-lucide="scale"></i> Peso estimado</span><span id="step-peso">—</span></div>
+                                    <div class="calc-step-row"><span>Tempo convertido</span><span id="step-tempo-h">—</span></div>
                                 </div>
                             </div>
 
-                            <!-- 2️⃣ CUSTOS VARIÁVEIS -->
                             <div class="card calc-card">
                                 <h3><i data-lucide="zap"></i> 2. Custos Variáveis de Produção
                                     <span class="badge badge-primary" style="margin-left:0.5rem;font-size:0.65rem;">Sincronizado com Configurações</span>
@@ -373,214 +498,125 @@
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label>Valor do Kg de Filamento (R$)</label>
-                                        <input type="number" id="adv-custo-kg" step="0.01" min="0" placeholder="120.00"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Carregado das configurações</small>
+                                        <input type="number" id="adv-custo-kg" step="0.01" min="0" placeholder="120.00" oninput="App.calcAdvanced()">
                                     </div>
                                     <div class="form-group">
                                         <label>Preço kWh (R$)</label>
-                                        <input type="number" id="adv-custo-kwh" step="0.01" min="0" placeholder="0.85"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Valor da tarifa de energia</small>
+                                        <input type="number" id="adv-custo-kwh" step="0.01" min="0" placeholder="0.85" oninput="App.calcAdvanced()">
                                     </div>
                                     <div class="form-group">
                                         <label>Consumo da Máquina (W)</label>
-                                        <input type="number" id="adv-consumo-w" step="1" min="0" placeholder="350"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Potência média da impressora em Watts</small>
+                                        <input type="number" id="adv-consumo-w" step="1" min="0" placeholder="350" oninput="App.calcAdvanced()">
                                     </div>
                                     <div class="form-group">
                                         <label>Custo Hora Máquina (R$)</label>
-                                        <input type="number" id="adv-custo-hora" step="0.01" min="0" placeholder="5.00"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Depreciação + manutenção por hora</small>
+                                        <input type="number" id="adv-custo-hora" step="0.01" min="0" placeholder="5.00" oninput="App.calcAdvanced()">
                                     </div>
                                     <div class="form-group">
                                         <label>Depreciação (%)</label>
-                                        <input type="number" id="adv-depreciacao" step="0.1" min="0" max="100" placeholder="10"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Percentual de desgaste do equipamento</small>
+                                        <input type="number" id="adv-depreciacao" step="0.1" min="0" max="100" placeholder="10" oninput="App.calcAdvanced()">
                                     </div>
                                     <div class="form-group">
                                         <label>Média de Falhas (%)</label>
-                                        <input type="number" id="adv-falhas" step="0.1" min="0" max="100" placeholder="5"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Taxa de falha estimada por impressão</small>
+                                        <input type="number" id="adv-falhas" step="0.1" min="0" max="100" placeholder="5" oninput="App.calcAdvanced()">
                                     </div>
                                 </div>
 
-                                <!-- Cálculos de custo variável -->
                                 <div class="calc-steps" id="calc-steps-custos">
                                     <div class="calc-step-title"><i data-lucide="coins"></i> Detalhamento de Custos</div>
-                                    <div class="calc-step-row">
-                                        <span>Custo do Material</span>
-                                        <span id="step-custo-material">—</span>
-                                    </div>
-                                    <div class="calc-step-row">
-                                        <span>Energia consumida (kWh)</span>
-                                        <span id="step-energia-kwh">—</span>
-                                    </div>
-                                    <div class="calc-step-row">
-                                        <span>Custo da Energia</span>
-                                        <span id="step-custo-energia">—</span>
-                                    </div>
-                                    <div class="calc-step-row">
-                                        <span>Custo Depreciação</span>
-                                        <span id="step-custo-depreciacao">—</span>
-                                    </div>
-                                    <div class="calc-step-row">
-                                        <span>Subtotal (antes de falhas)</span>
-                                        <span id="step-subtotal">—</span>
-                                    </div>
-                                    <div class="calc-step-row">
-                                        <span>Custo de Falhas</span>
-                                        <span id="step-custo-falhas">—</span>
-                                    </div>
+                                    <div class="calc-step-row"><span>Custo do Material</span><span id="step-custo-material">—</span></div>
+                                    <div class="calc-step-row"><span>Energia consumida (kWh)</span><span id="step-energia-kwh">—</span></div>
+                                    <div class="calc-step-row"><span>Custo da Energia</span><span id="step-custo-energia">—</span></div>
+                                    <div class="calc-step-row"><span>Custo Depreciação</span><span id="step-custo-depreciacao">—</span></div>
+                                    <div class="calc-step-row"><span>Subtotal (antes de falhas)</span><span id="step-subtotal">—</span></div>
+                                    <div class="calc-step-row"><span>Custo de Falhas</span><span id="step-custo-falhas">—</span></div>
                                 </div>
                             </div>
 
-                            <!-- 3️⃣ CUSTOS ADICIONAIS -->
                             <div class="card calc-card">
                                 <h3><i data-lucide="wrench"></i> 3. Custos Adicionais</h3>
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label>Modelagem 3D (R$)</label>
-                                        <input type="number" id="adv-modelagem" step="0.01" min="0" value="0" placeholder="0.00"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Custo de criação/edição do modelo</small>
+                                        <input type="number" id="adv-modelagem" step="0.01" min="0" value="0" placeholder="0.00" oninput="App.calcAdvanced()">
                                     </div>
                                     <div class="form-group">
                                         <label>Acabamento (%)</label>
-                                        <input type="number" id="adv-acabamento" step="0.1" min="0" max="100" value="0" placeholder="0"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Lixar, pintar, polir (% sobre custo base)</small>
+                                        <input type="number" id="adv-acabamento" step="0.1" min="0" max="100" value="0" placeholder="0" oninput="App.calcAdvanced()">
                                     </div>
                                     <div class="form-group">
                                         <label>Fixação / Cola (R$)</label>
-                                        <input type="number" id="adv-fixacao" step="0.01" min="0" value="0" placeholder="0.00"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Cola, parafusos, insertos, etc.</small>
+                                        <input type="number" id="adv-fixacao" step="0.01" min="0" value="0" placeholder="0.00" oninput="App.calcAdvanced()">
                                     </div>
                                     <div class="form-group">
                                         <label>Outros Custos (R$)</label>
-                                        <input type="number" id="adv-outros" step="0.01" min="0" value="0" placeholder="0.00"
-                                               oninput="App.calcAdvanced()">
-                                        <small>Embalagem, frete, etc.</small>
+                                        <input type="number" id="adv-outros" step="0.01" min="0" value="0" placeholder="0.00" oninput="App.calcAdvanced()">
                                     </div>
                                 </div>
                             </div>
-
                         </div>
 
-                        <!-- COLUNA DIREITA: Resultado + Margem -->
                         <div class="calc-results">
-
-                            <!-- Resultado Final Sticky -->
                             <div class="card calc-result-card" id="calc-result-card">
                                 <h3><i data-lucide="target"></i> 4. Resultado Final</h3>
-
                                 <div class="result-breakdown">
-                                    <div class="result-row">
-                                        <span>Material</span>
-                                        <span id="res-material">R$ 0,00</span>
-                                    </div>
-                                    <div class="result-row">
-                                        <span>Energia</span>
-                                        <span id="res-energia">R$ 0,00</span>
-                                    </div>
-                                    <div class="result-row">
-                                        <span>Depreciação</span>
-                                        <span id="res-depreciacao">R$ 0,00</span>
-                                    </div>
-                                    <div class="result-row">
-                                        <span>Falhas</span>
-                                        <span id="res-falhas">R$ 0,00</span>
-                                    </div>
+                                    <div class="result-row"><span>Material</span><span id="res-material">R$ 0,00</span></div>
+                                    <div class="result-row"><span>Energia</span><span id="res-energia">R$ 0,00</span></div>
+                                    <div class="result-row"><span>Depreciação</span><span id="res-depreciacao">R$ 0,00</span></div>
+                                    <div class="result-row"><span>Falhas</span><span id="res-falhas">R$ 0,00</span></div>
                                     <div class="result-divider"></div>
-                                    <div class="result-row">
-                                        <span>Modelagem</span>
-                                        <span id="res-modelagem">R$ 0,00</span>
-                                    </div>
-                                    <div class="result-row">
-                                        <span>Acabamento</span>
-                                        <span id="res-acabamento">R$ 0,00</span>
-                                    </div>
-                                    <div class="result-row">
-                                        <span>Fixação / Cola</span>
-                                        <span id="res-fixacao">R$ 0,00</span>
-                                    </div>
-                                    <div class="result-row">
-                                        <span>Outros</span>
-                                        <span id="res-outros">R$ 0,00</span>
-                                    </div>
+                                    <div class="result-row"><span>Modelagem</span><span id="res-modelagem">R$ 0,00</span></div>
+                                    <div class="result-row"><span>Acabamento</span><span id="res-acabamento">R$ 0,00</span></div>
+                                    <div class="result-row"><span>Fixação / Cola</span><span id="res-fixacao">R$ 0,00</span></div>
+                                    <div class="result-row"><span>Outros</span><span id="res-outros">R$ 0,00</span></div>
                                     <div class="result-divider"></div>
-                                    <div class="result-row result-total">
-                                        <span>CUSTO DE PRODUÇÃO</span>
-                                        <span id="res-custo-total">R$ 0,00</span>
-                                    </div>
+                                    <div class="result-row result-total"><span>CUSTO DE PRODUÇÃO</span><span id="res-custo-total">R$ 0,00</span></div>
                                 </div>
-
-                                <!-- Margem e preço de venda -->
                                 <div class="margin-section">
                                     <div class="form-group">
                                         <label>Margem de Lucro (%)</label>
-                                        <input type="number" id="adv-margem" step="0.5" min="0" max="500" placeholder="50"
-                                               oninput="App.calcAdvanced()">
+                                        <input type="number" id="adv-margem" step="0.5" min="0" max="500" placeholder="50" oninput="App.calcAdvanced()">
                                     </div>
-                                    <div class="result-row result-price">
-                                        <span>PREÇO DE VENDA</span>
-                                        <span id="res-preco-venda">R$ 0,00</span>
-                                    </div>
-                                    <div class="result-row result-profit">
-                                        <span>LUCRO</span>
-                                        <span id="res-lucro">R$ 0,00</span>
-                                    </div>
-                                    <div class="result-row">
-                                        <span>Margem Real</span>
-                                        <span id="res-margem-real">0,0%</span>
-                                    </div>
+                                    <div class="result-row result-price"><span>PREÇO DE VENDA</span><span id="res-preco-venda">R$ 0,00</span></div>
+                                    <div class="result-row result-profit"><span>LUCRO</span><span id="res-lucro">R$ 0,00</span></div>
+                                    <div class="result-row"><span>Margem Real</span><span id="res-margem-real">0,0%</span></div>
                                 </div>
-
-                                <!-- Alerta de margem baixa -->
                                 <div class="margin-alert hidden" id="margin-alert">
                                     <i data-lucide="alert-triangle"></i> Margem abaixo de 20%! Considere ajustar o preço.
                                 </div>
                             </div>
 
-                            <!-- Nome do produto para salvar -->
                             <div class="card">
                                 <h3><i data-lucide="package"></i> Salvar como Produto</h3>
                                 <div class="form-group">
                                     <label>Nome do Produto</label>
                                     <input type="text" id="adv-nome-produto" placeholder="Ex: Vaso Decorativo Espiral">
                                 </div>
+                                <div class="form-group">
+                                    <label>Categoria</label>
+                                    <select id="adv-categoria"></select>
+                                </div>
                                 <button class="btn btn-primary" style="width:100%" onclick="App.calcSaveAsProduct()">
                                     <i data-lucide="save"></i> Salvar no Catálogo
                                 </button>
                             </div>
-
                         </div>
-
                     </div>
-
                 </div>
 
                 <!-- ===================================
-                     SEÇÃO: CONFIGURAÇÕES (ADMIN)
+                     CONFIGURAÇÕES (ADMIN)
                      =================================== -->
                 <div id="section-settings" class="section admin-only">
-
                     <div class="section-header">
                         <h1><i data-lucide="settings"></i> Configurações</h1>
                     </div>
-
                     <div class="card">
                         <h3><i data-lucide="sliders-horizontal"></i> Parâmetros de Cálculo</h3>
                         <p class="text-secondary mb-2" style="font-size: 0.85rem;">
                             Ajuste os parâmetros usados no cálculo de custo dos produtos.
                             Ao salvar, todos os produtos serão recalculados automaticamente.
                         </p>
-
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Margem Padrão</label>
@@ -590,68 +626,54 @@
                             <div class="form-group">
                                 <label>Custo por Kg de Filamento (R$)</label>
                                 <input type="number" id="cfg-custo-kg" step="0.01" min="0">
-                                <small>Preço do kg do filamento utilizado</small>
                             </div>
                             <div class="form-group">
                                 <label>Custo Hora Máquina (R$)</label>
                                 <input type="number" id="cfg-custo-hora" step="0.01" min="0">
-                                <small>Custo de operação por hora da impressora</small>
                             </div>
                             <div class="form-group">
                                 <label>Custo kWh (R$)</label>
                                 <input type="number" id="cfg-custo-kwh" step="0.01" min="0">
-                                <small>Valor do kWh de energia na sua região</small>
                             </div>
                             <div class="form-group">
                                 <label>Consumo da Máquina (W)</label>
                                 <input type="number" id="cfg-consumo-w" step="1" min="0">
-                                <small>Potência média da impressora em Watts</small>
                             </div>
                             <div class="form-group">
                                 <label>Percentual de Falha</label>
                                 <input type="number" id="cfg-falha" step="0.01" min="0" max="1">
-                                <small>Ex: 0.05 = 5% de taxa de falha estimada</small>
+                                <small>Ex: 0.05 = 5%</small>
                             </div>
                             <div class="form-group">
                                 <label>Depreciação (%)</label>
                                 <input type="number" id="cfg-depreciacao" step="0.01" min="0" max="1">
-                                <small>Ex: 0.10 = 10% de depreciação do equipamento</small>
+                                <small>Ex: 0.10 = 10%</small>
                             </div>
                         </div>
-
                         <button class="btn btn-primary" onclick="App.saveSettings()">
                             <i data-lucide="save"></i> Salvar e Recalcular Produtos
                         </button>
                     </div>
-
                 </div>
 
                 <!-- ===================================
-                     SEÇÃO: USUÁRIOS (ADMIN)
+                     USUÁRIOS (ADMIN)
                      =================================== -->
                 <div id="section-users" class="section admin-only">
-
                     <div class="section-header">
                         <h1><i data-lucide="users"></i> Usuários</h1>
                         <button class="btn btn-primary" onclick="App.openUserModal()">
-                            + Novo Usuário
+                            <i data-lucide="plus"></i> Novo Usuário
                         </button>
                     </div>
-
                     <div class="table-container">
                         <table>
                             <thead>
-                                <tr>
-                                    <th>Nome</th>
-                                    <th>Email</th>
-                                    <th>Tipo</th>
-                                    <th>Ações</th>
-                                </tr>
+                                <tr><th>Nome</th><th>Email</th><th>Tipo</th><th>Ações</th></tr>
                             </thead>
                             <tbody id="users-body"></tbody>
                         </table>
                     </div>
-
                 </div>
 
             </main>
@@ -659,16 +681,32 @@
     </div>
 
     <!-- ============================================
-         MODAL GENÉRICO
+         MODAL GENÉRICO (multi-uso)
          ============================================ -->
     <div id="modal-overlay" class="modal-overlay hidden">
-        <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal" id="modal-container" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3 id="modal-title">Modal</h3>
                 <button class="modal-close" onclick="App.closeModal()">&times;</button>
             </div>
-            <div class="modal-body" id="modal-body">
-                <!-- Conteúdo dinâmico -->
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         MODAL DE CONFIRMAÇÃO
+         ============================================ -->
+    <div id="confirm-overlay" class="modal-overlay hidden">
+        <div class="modal modal-confirm" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="confirm-title">Confirmação</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message"></p>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" id="confirm-cancel">Cancelar</button>
+                    <button class="btn btn-danger" id="confirm-ok">Confirmar</button>
+                </div>
             </div>
         </div>
     </div>
@@ -679,26 +717,29 @@
     <div id="toast-container"></div>
 
     <!-- ============================================
-         SCRIPTS (ordem importante!)
+         SCRIPTS
          ============================================ -->
-    <!-- Bibliotecas externas via CDN -->
+    <!-- CDN Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-    <!-- Módulos do sistema (ordem de dependência) -->
+    <!-- System Modules (dependency order) -->
+    <script src="js/database.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/calculator.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/promotions.js"></script>
+    <script src="js/filemanager.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/app.js"></script>
 
-    <!-- Inicializa ícones Lucide após carregamento -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             lucide.createIcons();
         });
     </script>
-
 </body>
 </html>

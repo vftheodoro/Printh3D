@@ -1,5 +1,5 @@
 // ============================================
-// PRINTH3D LITE — Módulo Principal (App)
+// PRINTH3D PRO — Módulo Principal (App)
 // Orquestra navegação, CRUD, modais e feedback
 // ============================================
 
@@ -8,21 +8,40 @@ const App = (() => {
     let currentSection = 'dashboard';
     let editingProductId = null;
     let editingUserId = null;
+    let productViewMode = 'table'; // 'table' | 'grid'
+    let searchTimeout = null;
+    let _confirmResolve = null;
 
     // ==========================================
-    //  INICIALIZAÇÃO
+    //  INICIALIZAÇÃO (async)
     // ==========================================
 
-    function init() {
-        Storage.init();
-        if (!Auth.checkAuth()) return;
+    async function init() {
+        try {
+            await Storage.init();
+        } catch (err) {
+            console.error('[App] Falha ao inicializar Storage/DB:', err);
+        }
+
+        if (!Auth.checkAuth()) {
+            hideLoading();
+            return;
+        }
 
         setupUI();
         setupNavigation();
         setupGlobalListeners();
-        navigate('dashboard');
+        await navigate('dashboard');
+        hideLoading();
 
-        console.log('[App] Printh3D Lite inicializado.');
+        console.log('[App] Printh3D Pro inicializado.');
+    }
+
+    function hideLoading() {
+        const loader = document.getElementById('app-loading');
+        const layout = document.getElementById('app-layout');
+        if (loader) loader.style.display = 'none';
+        if (layout) layout.style.display = '';
     }
 
     // ------------------------------------------
@@ -32,7 +51,6 @@ const App = (() => {
         const user = Auth.getCurrentUser();
         if (!user) return;
 
-        // Sidebar user info
         const avatarEl = document.getElementById('user-avatar');
         const nameEl = document.getElementById('user-display-name');
         const roleEl = document.getElementById('user-display-role');
@@ -43,7 +61,6 @@ const App = (() => {
         if (roleEl) roleEl.textContent = user.tipo === 'ADMIN' ? 'Administrador' : 'Vendedor';
         if (headerName) headerName.textContent = user.nome;
 
-        // Esconde elementos restritos a ADMIN
         if (!Auth.isAdmin()) {
             document.querySelectorAll('.admin-only').forEach(el => {
                 el.style.display = 'none';
@@ -55,7 +72,6 @@ const App = (() => {
     // Configura listeners de navegação
     // ------------------------------------------
     function setupNavigation() {
-        // Links do menu lateral
         document.querySelectorAll('[data-section]').forEach(link => {
             link.addEventListener('click', e => {
                 e.preventDefault();
@@ -64,42 +80,63 @@ const App = (() => {
             });
         });
 
-        // Logout
         document.getElementById('btn-logout').addEventListener('click', e => {
             e.preventDefault();
             Auth.logout();
         });
 
-        // Exportar Excel
-        document.getElementById('btn-export').addEventListener('click', () => {
-            try {
-                Storage.exportExcel();
-                showToast('Backup exportado com sucesso!', 'success');
-            } catch (err) {
-                showToast('Erro ao exportar: ' + err.message, 'danger');
-            }
-        });
+        // Backup ZIP
+        const btnBackup = document.getElementById('btn-export-backup');
+        if (btnBackup) {
+            btnBackup.addEventListener('click', async () => {
+                try {
+                    showToast('Gerando backup ZIP...', 'info');
+                    await Database.exportFullBackup();
+                    showToast('Backup ZIP exportado!', 'success');
+                } catch (err) {
+                    showToast('Erro no backup: ' + err.message, 'danger');
+                }
+            });
+        }
 
-        // Importar Excel - trigger
+        // Exportar Excel
+        const btnExcel = document.getElementById('btn-export-excel');
+        if (btnExcel) {
+            btnExcel.addEventListener('click', async () => {
+                try {
+                    await Database.exportExcel();
+                    showToast('Excel exportado!', 'success');
+                } catch (err) {
+                    showToast('Erro ao exportar: ' + err.message, 'danger');
+                }
+            });
+        }
+
+        // Importar
         document.getElementById('btn-import-trigger').addEventListener('click', () => {
             document.getElementById('file-import').click();
         });
 
-        // Importar Excel - handler
         document.getElementById('file-import').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             try {
-                await Storage.importExcel(file);
-                showToast('Dados importados com sucesso!', 'success');
-                navigate(currentSection); // Re-renderiza seção atual
+                if (file.name.endsWith('.zip')) {
+                    showToast('Importando backup ZIP...', 'info');
+                    await Database.importFullBackup(file);
+                    await Storage.refreshCache();
+                    showToast('Backup importado com sucesso!', 'success');
+                } else {
+                    await Storage.importExcel(file);
+                    showToast('Dados importados com sucesso!', 'success');
+                }
+                navigate(currentSection);
             } catch (err) {
                 showToast('Erro ao importar: ' + err.message, 'danger');
             }
             e.target.value = '';
         });
 
-        // Sidebar mobile toggle
         const toggleBtn = document.getElementById('sidebar-toggle');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', () => {
@@ -108,25 +145,27 @@ const App = (() => {
             });
         }
 
-        // Backdrop fecha sidebar
         const backdrop = document.getElementById('sidebar-backdrop');
-        if (backdrop) {
-            backdrop.addEventListener('click', closeMobileSidebar);
-        }
+        if (backdrop) backdrop.addEventListener('click', closeMobileSidebar);
     }
 
     // ------------------------------------------
-    // Listeners globais (modal, teclado)
+    // Listeners globais
     // ------------------------------------------
     function setupGlobalListeners() {
-        // Fechar modal ao clicar no overlay
         document.getElementById('modal-overlay').addEventListener('click', e => {
             if (e.target === e.currentTarget) closeModal();
         });
-
-        // Fechar modal com Escape
+        document.getElementById('confirm-overlay')?.addEventListener('click', e => {
+            if (e.target === e.currentTarget) resolveConfirm(false);
+        });
+        document.getElementById('confirm-cancel')?.addEventListener('click', () => resolveConfirm(false));
+        document.getElementById('confirm-ok')?.addEventListener('click', () => resolveConfirm(true));
         document.addEventListener('keydown', e => {
-            if (e.key === 'Escape') closeModal();
+            if (e.key === 'Escape') {
+                closeModal();
+                resolveConfirm(false);
+            }
         });
     }
 
@@ -136,56 +175,76 @@ const App = (() => {
     }
 
     // ==========================================
+    //  CONFIRMAÇÃO MODAL
+    // ==========================================
+
+    function confirmDialog(title, message) {
+        return new Promise(resolve => {
+            _confirmResolve = resolve;
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            document.getElementById('confirm-overlay').classList.remove('hidden');
+        });
+    }
+
+    function resolveConfirm(val) {
+        document.getElementById('confirm-overlay')?.classList.add('hidden');
+        if (_confirmResolve) {
+            _confirmResolve(val);
+            _confirmResolve = null;
+        }
+    }
+
+    // ==========================================
     //  NAVEGAÇÃO
     // ==========================================
 
-    function navigate(section) {
+    async function navigate(section) {
         currentSection = section;
 
-        // Atualiza estado ativo no menu
         document.querySelectorAll('[data-section]').forEach(link => {
             const li = link.parentElement;
             li.classList.toggle('active', link.dataset.section === section);
         });
 
-        // Mostra/oculta seções
         document.querySelectorAll('.section').forEach(el => {
             el.classList.toggle('active', el.id === 'section-' + section);
         });
 
-        // Título do header
         const titles = {
-            dashboard: 'Dashboard',
-            products: 'Produtos',
-            sales: 'Vendas',
+            dashboard: 'Dashboard', categories: 'Categorias',
+            products: 'Produtos', sales: 'Vendas',
+            promotions: 'Promoções e Cupons',
             calculator: 'Calculadora de Custo',
-            settings: 'Configurações',
-            users: 'Usuários'
+            settings: 'Configurações', users: 'Usuários'
         };
-        const titleEl = document.getElementById('page-title');
-        if (titleEl) titleEl.textContent = titles[section] || '';
+        setText('page-title', titles[section] || '');
 
-        // Renderiza conteúdo da seção
         switch (section) {
-            case 'dashboard': Dashboard.render(); break;
-            case 'products':  renderProducts();   break;
-            case 'sales':     renderSales();      break;
-            case 'calculator':renderCalculator(); break;
-            case 'settings':  renderSettings();   break;
-            case 'users':     renderUsers();      break;
+            case 'dashboard':  Dashboard.render(); break;
+            case 'categories': await renderCategories(); break;
+            case 'products':   await renderProducts(); break;
+            case 'sales':      renderSales(); break;
+            case 'promotions': await renderPromotions(); break;
+            case 'calculator': await renderCalculator(); break;
+            case 'settings':   renderSettings(); break;
+            case 'users':      renderUsers(); break;
         }
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     // ==========================================
     //  MODAL GENÉRICO
     // ==========================================
 
-    function openModal(title, bodyHtml) {
+    function openModal(title, bodyHtml, wide) {
         document.getElementById('modal-title').textContent = title;
         document.getElementById('modal-body').innerHTML = bodyHtml;
+        const container = document.getElementById('modal-container');
+        if (container) container.classList.toggle('modal-wide', !!wide);
         document.getElementById('modal-overlay').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
-        // Re-render Lucide icons in dynamic content
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
@@ -197,229 +256,637 @@ const App = (() => {
     }
 
     // ==========================================
-    //  PRODUTOS — CRUD
+    //  CATEGORIAS — CRUD
     // ==========================================
 
-    function renderProducts() {
-        const products = Storage.getSheet('PRODUCTS');
-        const tbody = document.getElementById('products-body');
-        if (!tbody) return;
+    async function renderCategories() {
+        const categories = await Categories.getAll();
+        const grid = document.getElementById('categories-grid');
+        if (!grid) return;
 
-        if (products.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="text-center text-muted" style="padding: 2.5rem;">
-                        <div class="empty-state">
-                            <div class="empty-icon"><i data-lucide="package"></i></div>
-                            <p>Nenhum produto cadastrado.<br>Clique em "+ Novo Produto" para começar.</p>
-                        </div>
-                    </td>
-                </tr>`;
+        if (categories.length === 0) {
+            grid.innerHTML = `<div class="empty-state"><div class="empty-icon"><i data-lucide="folder"></i></div><p>Nenhuma categoria.<br>Clique em "+ Nova Categoria" para criar.</p></div>`;
             return;
         }
 
-        tbody.innerHTML = products.map(p => {
-            const margem = p.preco_venda > 0
-                ? ((p.preco_venda - p.custo_total) / p.preco_venda * 100)
-                : 0;
-            const margemClass = margem < 20 ? 'text-danger' : 'text-success';
-            const margemAlert = margem < 20 ? '' : '';
-
-            return `<tr>
-                <td><strong>${escapeHtml(p.nome)}</strong></td>
-                <td>${p.peso_g}g</td>
-                <td>${p.tempo_h}h</td>
-                <td>${Calculator.formatCurrency(p.custo_total)}</td>
-                <td>${Calculator.formatCurrency(p.preco_venda)}</td>
-                <td class="${margemClass}">${margem.toFixed(1)}%${margemAlert}</td>
-                <td class="actions">
-                    <button class="btn btn-sm btn-icon" onclick="App.openProductModal(${p.id})" title="Editar">✏️</button>
-                    <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteProduct(${p.id})" title="Excluir">🗑️</button>
-                </td>
-            </tr>`;
-        }).join('');
+        let html = '';
+        for (const cat of categories) {
+            const count = await Categories.getProductCount(cat.id);
+            html += `
+            <div class="category-card" style="border-left: 4px solid ${cat.cor}">
+                <div class="category-card-header">
+                    <div class="category-icon" style="background:${cat.cor}20;color:${cat.cor}">
+                        <i data-lucide="${cat.icone || 'package'}"></i>
+                    </div>
+                    <div>
+                        <h4>${escapeHtml(cat.nome)}</h4>
+                        <span class="badge badge-secondary">${escapeHtml(cat.prefixo)}</span>
+                    </div>
+                </div>
+                <p class="category-desc">${escapeHtml(cat.descricao || '')}</p>
+                <div class="category-footer">
+                    <span class="text-muted">${count} produto(s)</span>
+                    <div class="actions">
+                        <button class="btn btn-sm btn-icon" onclick="App.openCategoryModal(${cat.id})" title="Editar"><i data-lucide="pencil"></i></button>
+                        <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteCategory(${cat.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
+                    </div>
+                </div>
+            </div>`;
+        }
+        grid.innerHTML = html;
+        refreshLucideIcons();
     }
 
-    // ------------------------------------------
-    // Abre modal de produto (novo ou edição)
-    // ------------------------------------------
-    function openProductModal(id) {
-        editingProductId = id || null;
-        const product = id ? Storage.getRowById('PRODUCTS', id) : null;
-        const title = product ? 'Editar Produto' : 'Novo Produto';
+    async function openCategoryModal(id) {
+        const cat = id ? await Categories.getById(id) : null;
+        const title = cat ? 'Editar Categoria' : 'Nova Categoria';
+
+        const iconsBtns = Categories.AVAILABLE_ICONS.map(ic => {
+            const sel = (cat && cat.icone === ic) ? 'selected' : '';
+            return `<button type="button" class="icon-btn ${sel}" data-icon="${ic}" onclick="App._selectIcon(this)"><i data-lucide="${ic}"></i></button>`;
+        }).join('');
+
+        const colorBtns = Categories.AVAILABLE_COLORS.map(c => {
+            const sel = (cat && cat.cor === c) ? 'selected' : '';
+            return `<button type="button" class="color-btn ${sel}" data-color="${c}" style="background:${c}" onclick="App._selectColor(this)"></button>`;
+        }).join('');
 
         const html = `
-            <form id="product-form" onsubmit="event.preventDefault(); App.saveProduct();">
+        <form onsubmit="event.preventDefault(); App.saveCategory(${id || 'null'});">
+            <div class="form-grid">
                 <div class="form-group">
-                    <label>Nome do Produto</label>
-                    <input type="text" id="prod-nome"
-                           value="${product ? escapeHtml(product.nome) : ''}"
-                           required placeholder="Ex: Vaso Decorativo, Suporte de Celular">
+                    <label>Nome da Categoria</label>
+                    <input type="text" id="cat-nome" value="${cat ? escapeHtml(cat.nome) : ''}" required placeholder="Ex: Chaveiros">
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Peso (gramas)</label>
-                        <input type="number" id="prod-peso"
-                               value="${product ? product.peso_g : ''}"
-                               required min="0.1" step="0.1"
-                               placeholder="Ex: 150"
-                               oninput="App.calcProductPreview()">
-                    </div>
-                    <div class="form-group">
-                        <label>Tempo de Impressão (horas)</label>
-                        <input type="number" id="prod-tempo"
-                               value="${product ? product.tempo_h : ''}"
-                               required min="0.1" step="0.1"
-                               placeholder="Ex: 3.5"
-                               oninput="App.calcProductPreview()">
-                    </div>
+                <div class="form-group">
+                    <label>Prefixo SKU (2-5 letras)</label>
+                    <input type="text" id="cat-prefixo" value="${cat ? escapeHtml(cat.prefixo) : ''}" required maxlength="5" placeholder="Ex: CHAV" style="text-transform:uppercase">
                 </div>
-
-                <div id="calc-preview" class="calc-preview" style="display:none;">
-                    <h4><i data-lucide="bar-chart-3"></i> Simulação de Custo</h4>
-                    <div class="calc-grid">
-                        <div class="calc-item">
-                            <span>Material</span>
-                            <span id="calc-material">—</span>
-                        </div>
-                        <div class="calc-item">
-                            <span>Máquina</span>
-                            <span id="calc-maquina">—</span>
-                        </div>
-                        <div class="calc-item">
-                            <span>Energia</span>
-                            <span id="calc-energia">—</span>
-                        </div>
-                        <div class="calc-item">
-                            <span>Depreciação</span>
-                            <span id="calc-depreciacao">—</span>
-                        </div>
-                        <div class="calc-item">
-                            <span>Falhas</span>
-                            <span id="calc-falhas">—</span>
-                        </div>
-                        <div class="calc-item total">
-                            <span>Custo Total</span>
-                            <span id="calc-total">—</span>
-                        </div>
-                        <div class="calc-item success">
-                            <span>Preço de Venda</span>
-                            <span id="calc-preco">—</span>
-                        </div>
-                        <div class="calc-item">
-                            <span>Lucro Estimado</span>
-                            <span id="calc-lucro">—</span>
-                        </div>
-                        <div class="calc-item">
-                            <span>Margem Real</span>
-                            <span id="calc-margem">—</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i data-lucide="save"></i> ${product ? 'Atualizar Produto' : 'Salvar Produto'}
-                    </button>
-                </div>
-            </form>
-        `;
+            </div>
+            <div class="form-group">
+                <label>Descrição</label>
+                <input type="text" id="cat-descricao" value="${cat ? escapeHtml(cat.descricao || '') : ''}" placeholder="Descrição breve (opcional)">
+            </div>
+            <div class="form-group">
+                <label>Ícone</label>
+                <div class="icon-picker">${iconsBtns}</div>
+                <input type="hidden" id="cat-icone" value="${cat ? cat.icone : 'package'}">
+            </div>
+            <div class="form-group">
+                <label>Cor</label>
+                <div class="color-picker">${colorBtns}</div>
+                <input type="hidden" id="cat-cor" value="${cat ? cat.cor : '#00BCFF'}">
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> ${cat ? 'Atualizar' : 'Criar Categoria'}</button>
+            </div>
+        </form>`;
 
         openModal(title, html);
+    }
 
-        // Se editando, dispara preview dos valores atuais
-        if (product) {
-            setTimeout(calcProductPreview, 50);
+    function _selectIcon(btn) {
+        btn.closest('.icon-picker').querySelectorAll('.icon-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('cat-icone').value = btn.dataset.icon;
+    }
+
+    function _selectColor(btn) {
+        btn.closest('.color-picker').querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('cat-cor').value = btn.dataset.color;
+    }
+
+    async function saveCategory(id) {
+        const data = {
+            id: id || undefined,
+            nome: document.getElementById('cat-nome').value.trim(),
+            prefixo: document.getElementById('cat-prefixo').value.trim(),
+            descricao: document.getElementById('cat-descricao').value.trim(),
+            icone: document.getElementById('cat-icone').value,
+            cor: document.getElementById('cat-cor').value
+        };
+        try {
+            await Categories.save(data);
+            showToast(id ? 'Categoria atualizada!' : 'Categoria criada!', 'success');
+            closeModal();
+            await renderCategories();
+        } catch (err) {
+            showToast(err.message, 'danger');
         }
     }
 
-    // ------------------------------------------
-    // Cálculo em tempo real no formulário
-    // ------------------------------------------
-    function calcProductPreview() {
-        const peso = parseFloat(document.getElementById('prod-peso').value);
-        const tempo = parseFloat(document.getElementById('prod-tempo').value);
+    async function deleteCategory(id) {
+        const cat = await Categories.getById(id);
+        if (!cat) return;
+        const ok = await confirmDialog('Excluir Categoria', `Excluir a categoria "${cat.nome}"? Esta ação não pode ser desfeita.`);
+        if (!ok) return;
+        try {
+            await Categories.remove(id);
+            showToast('Categoria excluída.', 'success');
+            await renderCategories();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }
 
+    // ==========================================
+    //  PRODUTOS — CRUD COMPLETO
+    // ==========================================
+
+    async function renderProducts() {
+        await populateCategoryFilter();
+        await loadProductsList();
+    }
+
+    async function populateCategoryFilter() {
+        const categories = await Categories.getAll();
+        const sel = document.getElementById('filter-category');
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">Todas</option>';
+        categories.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.nome;
+            if (String(c.id) === cur) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    }
+
+    async function loadProductsList() {
+        const query = document.getElementById('product-search')?.value || '';
+        const categoryId = document.getElementById('filter-category')?.value;
+        const status = document.getElementById('filter-status')?.value;
+        const sort = document.getElementById('filter-sort')?.value || 'nome';
+
+        const filters = { sort };
+        if (categoryId) filters.category_id = parseInt(categoryId);
+        if (status) filters.status = status;
+
+        const products = await Database.searchProducts(query, filters);
+        const promotions = await Promotions.getAllPromotions();
+        const now = new Date().toISOString();
+
+        // Table view
+        const tbody = document.getElementById('products-body');
+        if (tbody) {
+            if (products.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted" style="padding:2.5rem;"><div class="empty-state"><div class="empty-icon"><i data-lucide="package"></i></div><p>Nenhum produto encontrado.</p></div></td></tr>`;
+            } else {
+                tbody.innerHTML = products.map(p => {
+                    const margem = p.preco_venda > 0 ? ((p.preco_venda - p.custo_total) / p.preco_venda * 100) : 0;
+                    const margemClass = margem < 20 ? 'text-danger' : 'text-success';
+                    const promo = promotions.find(pr => pr.product_id === p.id && pr.ativo && (!pr.data_fim || pr.data_fim >= now));
+                    const promoHtml = promo ? `<span class="badge badge-warning">${promo.tipo_desconto === 'percentual' ? promo.valor_desconto + '%' : 'R$' + promo.valor_desconto}</span>` : '<span class="text-muted">—</span>';
+                    const stockClass = (p.estoque_minimo > 0 && p.quantidade_estoque <= p.estoque_minimo) ? 'text-danger' : '';
+                    const statusBadge = p.ativo !== false ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-secondary">Inativo</span>';
+
+                    return `<tr>
+                        <td><div class="product-thumb" data-product-id="${p.id}"><i data-lucide="image"></i></div></td>
+                        <td><code>${escapeHtml(p.codigo_sku || '—')}</code></td>
+                        <td><strong>${escapeHtml(p.nome)}</strong></td>
+                        <td><span class="badge" style="background:${p._category_cor || '#666'}20;color:${p._category_cor || '#666'};border:1px solid ${p._category_cor || '#666'}40">${escapeHtml(p._category_nome || '—')}</span></td>
+                        <td>${fmtC(p.custo_total)}</td>
+                        <td>${fmtC(p.preco_venda)}</td>
+                        <td>${promoHtml}</td>
+                        <td class="${stockClass}">${p.quantidade_estoque ?? 0}</td>
+                        <td class="${margemClass}">${margem.toFixed(1)}%</td>
+                        <td>${statusBadge}</td>
+                        <td class="actions">
+                            <button class="btn btn-sm btn-icon" onclick="App.openProductModal(${p.id})" title="Editar"><i data-lucide="pencil"></i></button>
+                            <button class="btn btn-sm btn-icon" onclick="App.downloadProductZip(${p.id})" title="ZIP"><i data-lucide="archive"></i></button>
+                            <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteProduct(${p.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+
+        // Grid view
+        const gridEl = document.getElementById('products-grid-view');
+        if (gridEl) {
+            if (products.length === 0) {
+                gridEl.innerHTML = `<div class="empty-state"><p>Nenhum produto encontrado.</p></div>`;
+            } else {
+                gridEl.innerHTML = products.map(p => {
+                    const promo = promotions.find(pr => pr.product_id === p.id && pr.ativo && (!pr.data_fim || pr.data_fim >= now));
+                    return `
+                    <div class="product-card" onclick="App.openProductModal(${p.id})">
+                        <div class="product-card-thumb" data-product-id="${p.id}"><i data-lucide="image"></i></div>
+                        <div class="product-card-body">
+                            <code class="text-muted">${escapeHtml(p.codigo_sku || '')}</code>
+                            <h4>${escapeHtml(p.nome)}</h4>
+                            <span class="badge" style="background:${p._category_cor || '#666'}20;color:${p._category_cor || '#666'}">${escapeHtml(p._category_nome || '—')}</span>
+                            <div class="product-card-price">
+                                ${promo ? `<span class="price-promo">${fmtC(promo.preco_promocional)}</span><span class="price-original">${fmtC(p.preco_venda)}</span>` : `<span>${fmtC(p.preco_venda)}</span>`}
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        refreshLucideIcons();
+
+        // Load thumbnails async
+        loadProductThumbnails(products);
+    }
+
+    async function loadProductThumbnails(products) {
+        for (const p of products) {
+            const url = await FileManager.getFirstImageUrl(p.id);
+            if (url) {
+                document.querySelectorAll(`[data-product-id="${p.id}"]`).forEach(el => {
+                    el.innerHTML = `<img src="${url}" alt="">`;
+                });
+            }
+        }
+    }
+
+    function toggleProductView() {
+        productViewMode = productViewMode === 'table' ? 'grid' : 'table';
+        const tableView = document.getElementById('products-table-view');
+        const gridView = document.getElementById('products-grid-view');
+        if (tableView) tableView.classList.toggle('hidden', productViewMode !== 'table');
+        if (gridView) gridView.classList.toggle('hidden', productViewMode !== 'grid');
+    }
+
+    function debounceProductSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => loadProductsList(), 300);
+    }
+
+    async function filterProducts() {
+        await loadProductsList();
+    }
+
+    // ------------------------------------------
+    // Product Modal with Tabs
+    // ------------------------------------------
+    async function openProductModal(id) {
+        editingProductId = id || null;
+        const product = id ? await Database.getById(Database.STORES.PRODUCTS, id) : null;
+        const categories = await Categories.getAll();
+        const title = product ? 'Editar Produto' : 'Novo Produto';
+
+        let defaultSku = '';
+        const firstCatId = categories.length > 0 ? categories[0].id : null;
+        if (!product && firstCatId) {
+            defaultSku = await Database.getNextSKU(firstCatId);
+        }
+
+        const catOptions = categories.map(c =>
+            `<option value="${c.id}" ${product && product.category_id === c.id ? 'selected' : (!product && c.id === firstCatId ? 'selected' : '')}>${escapeHtml(c.nome)} (${c.prefixo})</option>`
+        ).join('');
+
+        const p = product || {};
+        const dim = p.dimensoes || {};
+        const social = p.descricoes_social || {};
+
+        const html = `
+        <div class="modal-tabs">
+            <button class="modal-tab active" onclick="App.switchProductTab('tab-basic')">Básico</button>
+            <button class="modal-tab" onclick="App.switchProductTab('tab-details')">Detalhes</button>
+            <button class="modal-tab" onclick="App.switchProductTab('tab-stock')">Estoque</button>
+            ${id ? '<button class="modal-tab" onclick="App.switchProductTab(\'tab-files\')">Arquivos</button>' : ''}
+            <button class="modal-tab" onclick="App.switchProductTab('tab-social')">Redes Sociais</button>
+        </div>
+        <form id="product-form" onsubmit="event.preventDefault(); App.saveProduct();">
+
+            <!-- TAB: Básico -->
+            <div class="modal-tab-content active" id="tab-basic">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Categoria</label>
+                        <select id="prod-category" required onchange="App.onCategoryChange()">${catOptions}</select>
+                    </div>
+                    <div class="form-group">
+                        <label>Código SKU</label>
+                        <input type="text" id="prod-sku" value="${product ? escapeHtml(p.codigo_sku) : escapeHtml(defaultSku)}" required placeholder="AUTO-001" style="text-transform:uppercase">
+                        <small>Auto-gerado ao mudar categoria, ou edite manualmente</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Nome do Produto</label>
+                    <input type="text" id="prod-nome" value="${product ? escapeHtml(p.nome) : ''}" required placeholder="Ex: Vaso Decorativo Espiral">
+                </div>
+                <div class="form-group">
+                    <label>Descrição</label>
+                    <textarea id="prod-descricao" rows="2" placeholder="Descrição interna do produto...">${product ? escapeHtml(p.descricao || '') : ''}</textarea>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Peso (g)</label>
+                        <input type="number" id="prod-peso" value="${p.peso_g || ''}" required min="0.1" step="0.1" placeholder="150" oninput="App.calcProductPreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>Tempo (h)</label>
+                        <input type="number" id="prod-tempo" value="${p.tempo_h || ''}" required min="0.1" step="0.1" placeholder="3.5" oninput="App.calcProductPreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>Preço (R$)</label>
+                        <input type="number" id="prod-preco" value="${p.preco_venda || ''}" step="0.01" min="0" placeholder="Auto" oninput="App.calcProductPreview()">
+                        <small>Deixe vazio para calcular automático</small>
+                    </div>
+                </div>
+                <div id="calc-preview" class="calc-preview" style="display:none;">
+                    <h4><i data-lucide="bar-chart-3"></i> Simulação de Custo</h4>
+                    <div class="calc-grid">
+                        <div class="calc-item"><span>Material</span><span id="calc-material">—</span></div>
+                        <div class="calc-item"><span>Máquina</span><span id="calc-maquina">—</span></div>
+                        <div class="calc-item"><span>Energia</span><span id="calc-energia">—</span></div>
+                        <div class="calc-item total"><span>Custo Total</span><span id="calc-total">—</span></div>
+                        <div class="calc-item success"><span>Preço Venda</span><span id="calc-preco">—</span></div>
+                        <div class="calc-item"><span>Margem</span><span id="calc-margem">—</span></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Tags</label>
+                    <input type="text" id="prod-tags" value="${(p.tags || []).join(', ')}" placeholder="Ex: decoração, vaso, espiral (separar com vírgula)">
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;">
+                    <input type="checkbox" id="prod-ativo" ${p.ativo !== false ? 'checked' : ''}>
+                    <label for="prod-ativo" style="margin:0;cursor:pointer;">Produto ativo</label>
+                </div>
+            </div>
+
+            <!-- TAB: Detalhes -->
+            <div class="modal-tab-content" id="tab-details">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Material</label>
+                        <select id="prod-material">
+                            ${['PLA', 'ABS', 'PETG', 'TPU', 'Nylon', 'Resina', 'ASA', 'PC', 'Outro'].map(m =>
+                                `<option ${p.material === m ? 'selected' : ''}>${m}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cor do Filamento</label>
+                        <input type="text" id="prod-cor" value="${escapeHtml(p.cor || '')}" placeholder="Ex: Branco, Preto, Azul">
+                    </div>
+                    <div class="form-group">
+                        <label>Resolução da Camada (mm)</label>
+                        <input type="number" id="prod-resolucao" value="${p.resolucao_camada || 0.2}" step="0.01" min="0.01" max="1">
+                    </div>
+                </div>
+                <h4 style="margin-top:1rem;"><i data-lucide="ruler"></i> Dimensões (mm)</h4>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Largura</label>
+                        <input type="number" id="prod-dim-l" value="${dim.largura || 0}" step="0.1" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Altura</label>
+                        <input type="number" id="prod-dim-a" value="${dim.altura || 0}" step="0.1" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Profundidade</label>
+                        <input type="number" id="prod-dim-p" value="${dim.profundidade || 0}" step="0.1" min="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: Estoque -->
+            <div class="modal-tab-content" id="tab-stock">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Quantidade em Estoque</label>
+                        <input type="number" id="prod-estoque" value="${p.quantidade_estoque || 0}" min="0" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Estoque Mínimo (alerta)</label>
+                        <input type="number" id="prod-estoque-min" value="${p.estoque_minimo || 0}" min="0" step="1">
+                        <small>0 = sem alerta. Quando o estoque atingir esse valor, um alerta será exibido.</small>
+                    </div>
+                </div>
+            </div>
+
+            ${id ? `
+            <!-- TAB: Arquivos -->
+            <div class="modal-tab-content" id="tab-files">
+                ${FileManager.renderUploadZone(id)}
+                <div id="file-gallery-container"></div>
+            </div>
+            ` : ''}
+
+            <!-- TAB: Redes Sociais -->
+            <div class="modal-tab-content" id="tab-social">
+                <p class="text-muted" style="font-size:0.85rem;margin-bottom:1rem;">Crie descrições prontas para compartilhar nas redes sociais.</p>
+                <div class="form-group">
+                    <label><i data-lucide="instagram"></i> Instagram</label>
+                    <textarea id="prod-social-ig" rows="3" maxlength="2200" placeholder="Descrição para Instagram...">${escapeHtml(social.instagram || '')}</textarea>
+                    <small class="char-count"><span id="count-ig">${(social.instagram || '').length}</span>/2200</small>
+                </div>
+                <div class="form-group">
+                    <label><i data-lucide="facebook"></i> Facebook</label>
+                    <textarea id="prod-social-fb" rows="3" maxlength="5000" placeholder="Descrição para Facebook...">${escapeHtml(social.facebook || '')}</textarea>
+                    <small class="char-count"><span id="count-fb">${(social.facebook || '').length}</span>/5000</small>
+                </div>
+                <div class="form-group">
+                    <label><i data-lucide="message-circle"></i> WhatsApp</label>
+                    <textarea id="prod-social-wa" rows="3" maxlength="4096" placeholder="Mensagem para WhatsApp...">${escapeHtml(social.whatsapp || '')}</textarea>
+                    <small class="char-count"><span id="count-wa">${(social.whatsapp || '').length}</span>/4096</small>
+                </div>
+                <div class="form-group">
+                    <label><i data-lucide="music"></i> TikTok</label>
+                    <textarea id="prod-social-tk" rows="2" maxlength="2200" placeholder="Descrição para TikTok...">${escapeHtml(social.tiktok || '')}</textarea>
+                    <small class="char-count"><span id="count-tk">${(social.tiktok || '').length}</span>/2200</small>
+                </div>
+                <div class="form-group">
+                    <label><i data-lucide="globe"></i> Descrição Geral</label>
+                    <textarea id="prod-social-geral" rows="3" maxlength="5000" placeholder="Descrição geral para marketplace, site, etc...">${escapeHtml(social.geral || '')}</textarea>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> ${product ? 'Atualizar' : 'Salvar Produto'}</button>
+            </div>
+        </form>`;
+
+        openModal(title, html, true);
+
+        // Setup char counters
+        setupCharCounter('prod-social-ig', 'count-ig');
+        setupCharCounter('prod-social-fb', 'count-fb');
+        setupCharCounter('prod-social-wa', 'count-wa');
+        setupCharCounter('prod-social-tk', 'count-tk');
+
+        // If editing, show calc preview and load files
+        if (product) {
+            setTimeout(() => calcProductPreview(), 50);
+            if (id) await refreshProductFiles(id);
+        }
+    }
+
+    function setupCharCounter(textareaId, countId) {
+        const ta = document.getElementById(textareaId);
+        const cnt = document.getElementById(countId);
+        if (ta && cnt) {
+            ta.addEventListener('input', () => { cnt.textContent = ta.value.length; });
+        }
+    }
+
+    function switchProductTab(tabId) {
+        document.querySelectorAll('.modal-tab').forEach((btn, i) => {
+            btn.classList.toggle('active', document.querySelectorAll('.modal-tab-content')[i]?.id === tabId);
+        });
+        document.querySelectorAll('.modal-tab-content').forEach(el => {
+            el.classList.toggle('active', el.id === tabId);
+        });
+    }
+
+    async function onCategoryChange() {
+        const catId = parseInt(document.getElementById('prod-category')?.value);
+        if (!catId || editingProductId) return;
+        try {
+            const sku = await Database.getNextSKU(catId);
+            document.getElementById('prod-sku').value = sku;
+        } catch (e) { /* ignore */ }
+    }
+
+    function calcProductPreview() {
+        const peso = parseFloat(document.getElementById('prod-peso')?.value);
+        const tempo = parseFloat(document.getElementById('prod-tempo')?.value);
         const previewEl = document.getElementById('calc-preview');
         if (!peso || !tempo || peso <= 0 || tempo <= 0) {
             if (previewEl) previewEl.style.display = 'none';
             return;
         }
-
         const calc = Calculator.calcular(peso, tempo);
-        previewEl.style.display = 'block';
+        if (previewEl) previewEl.style.display = 'block';
+        setText('calc-material', fmtC(calc.custoMaterial));
+        setText('calc-maquina', fmtC(calc.custoMaquina));
+        setText('calc-energia', fmtC(calc.custoEnergia));
+        setText('calc-total', fmtC(calc.custoTotal));
 
-        document.getElementById('calc-material').textContent    = Calculator.formatCurrency(calc.custoMaterial);
-        document.getElementById('calc-maquina').textContent     = Calculator.formatCurrency(calc.custoMaquina);
-        document.getElementById('calc-energia').textContent     = Calculator.formatCurrency(calc.custoEnergia);
-        document.getElementById('calc-depreciacao').textContent = Calculator.formatCurrency(calc.custoDepreciacao);
-        document.getElementById('calc-falhas').textContent      = Calculator.formatCurrency(calc.custoFalhas);
-        document.getElementById('calc-total').textContent       = Calculator.formatCurrency(calc.custoTotal);
-        document.getElementById('calc-preco').textContent       = Calculator.formatCurrency(calc.precoVenda);
-        document.getElementById('calc-lucro').textContent       = Calculator.formatCurrency(calc.lucroEstimado);
-
+        // If user gave custom price, show that instead
+        const customPrice = parseFloat(document.getElementById('prod-preco')?.value);
+        const price = (customPrice && customPrice > 0) ? customPrice : calc.precoVenda;
+        setText('calc-preco', fmtC(price));
+        const margin = price > 0 ? ((price - calc.custoTotal) / price * 100) : 0;
         const margemEl = document.getElementById('calc-margem');
-        margemEl.textContent = calc.margemReal.toFixed(1) + '%';
-        margemEl.className = calc.margemReal < 20 ? 'text-danger' : 'text-success';
+        if (margemEl) {
+            margemEl.textContent = margin.toFixed(1) + '%';
+            margemEl.className = margin < 20 ? 'text-danger' : 'text-success';
+        }
     }
 
-    // ------------------------------------------
-    // Salva produto (criar ou atualizar)
-    // ------------------------------------------
-    function saveProduct() {
-        const nome   = document.getElementById('prod-nome').value.trim();
-        const peso_g = parseFloat(document.getElementById('prod-peso').value);
-        const tempo_h = parseFloat(document.getElementById('prod-tempo').value);
+    async function saveProduct() {
+        const nome = document.getElementById('prod-nome')?.value.trim();
+        const peso_g = parseFloat(document.getElementById('prod-peso')?.value);
+        const tempo_h = parseFloat(document.getElementById('prod-tempo')?.value);
+        const category_id = parseInt(document.getElementById('prod-category')?.value);
+        const sku = document.getElementById('prod-sku')?.value.trim().toUpperCase();
 
-        if (!nome) {
-            showToast('Informe o nome do produto.', 'warning');
-            return;
-        }
-        if (!peso_g || peso_g <= 0) {
-            showToast('Informe um peso válido.', 'warning');
-            return;
-        }
-        if (!tempo_h || tempo_h <= 0) {
-            showToast('Informe um tempo válido.', 'warning');
-            return;
-        }
+        if (!nome) { showToast('Informe o nome do produto.', 'warning'); return; }
+        if (!peso_g || peso_g <= 0) { showToast('Informe um peso válido.', 'warning'); return; }
+        if (!tempo_h || tempo_h <= 0) { showToast('Informe um tempo válido.', 'warning'); return; }
+        if (!sku) { showToast('Informe o código SKU.', 'warning'); return; }
+
+        // Check SKU uniqueness
+        const skuUnique = await Database.isSkuUnique(sku, editingProductId);
+        if (!skuUnique) { showToast('Este SKU já está em uso.', 'danger'); return; }
 
         const calc = Calculator.calcular(peso_g, tempo_h);
+        const customPrice = parseFloat(document.getElementById('prod-preco')?.value);
+        const precoFinal = (customPrice && customPrice > 0) ? customPrice : calc.precoVenda;
 
         const data = {
+            codigo_sku: sku,
+            category_id: category_id || null,
             nome,
+            descricao: document.getElementById('prod-descricao')?.value.trim() || '',
             peso_g,
             tempo_h,
+            dimensoes: {
+                largura: parseFloat(document.getElementById('prod-dim-l')?.value) || 0,
+                altura: parseFloat(document.getElementById('prod-dim-a')?.value) || 0,
+                profundidade: parseFloat(document.getElementById('prod-dim-p')?.value) || 0
+            },
+            material: document.getElementById('prod-material')?.value || 'PLA',
+            cor: document.getElementById('prod-cor')?.value.trim() || '',
+            resolucao_camada: parseFloat(document.getElementById('prod-resolucao')?.value) || 0.2,
             custo_total: calc.custoTotal,
-            preco_venda: calc.precoVenda,
-            created_at: new Date().toISOString()
+            preco_venda: precoFinal,
+            quantidade_estoque: parseInt(document.getElementById('prod-estoque')?.value) || 0,
+            estoque_minimo: parseInt(document.getElementById('prod-estoque-min')?.value) || 0,
+            tags: (document.getElementById('prod-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean),
+            descricoes_social: {
+                instagram: document.getElementById('prod-social-ig')?.value || '',
+                facebook: document.getElementById('prod-social-fb')?.value || '',
+                whatsapp: document.getElementById('prod-social-wa')?.value || '',
+                tiktok: document.getElementById('prod-social-tk')?.value || '',
+                geral: document.getElementById('prod-social-geral')?.value || ''
+            },
+            ativo: document.getElementById('prod-ativo')?.checked !== false,
+            updated_at: new Date().toISOString()
         };
 
-        if (editingProductId) {
-            Storage.updateRow('PRODUCTS', editingProductId, data);
-            showToast('Produto atualizado com sucesso!', 'success');
-        } else {
-            Storage.addRow('PRODUCTS', data);
-            showToast('Produto cadastrado com sucesso!', 'success');
+        try {
+            if (editingProductId) {
+                await Database.update(Database.STORES.PRODUCTS, editingProductId, data);
+                showToast('Produto atualizado!', 'success');
+            } else {
+                data.created_at = new Date().toISOString();
+                await Database.add(Database.STORES.PRODUCTS, data);
+                showToast('Produto cadastrado!', 'success');
+            }
+            await Storage.refreshCache();
+            closeModal();
+            await renderProducts();
+        } catch (err) {
+            showToast('Erro ao salvar: ' + err.message, 'danger');
         }
-
-        closeModal();
-        renderProducts();
     }
 
-    // ------------------------------------------
-    // Exclui produto com confirmação
-    // ------------------------------------------
-    function deleteProduct(id) {
-        const product = Storage.getRowById('PRODUCTS', id);
+    async function deleteProduct(id) {
+        const product = await Database.getById(Database.STORES.PRODUCTS, id);
         if (!product) return;
+        const ok = await confirmDialog('Excluir Produto', `Excluir "${product.nome}" (${product.codigo_sku})?\nTodos os arquivos serão removidos.`);
+        if (!ok) return;
 
-        if (!confirm(`Excluir o produto "${product.nome}"?\nEsta ação não pode ser desfeita.`)) return;
+        // Remove files
+        const files = await Database.getProductFiles(id);
+        for (const f of files) await Database.deleteById(Database.STORES.PRODUCT_FILES, f.id);
+        // Remove promotions
+        const promos = await Promotions.getProductPromotions(id);
+        for (const p of promos) await Promotions.deletePromotion(p.id);
 
-        Storage.deleteRow('PRODUCTS', id);
+        await Database.deleteById(Database.STORES.PRODUCTS, id);
+        await Storage.refreshCache();
         showToast('Produto excluído.', 'success');
-        renderProducts();
+        await renderProducts();
+    }
+
+    async function refreshProductFiles(productId) {
+        const container = document.getElementById('file-gallery-container');
+        if (!container) return;
+        const files = await FileManager.getProductFiles(productId);
+        container.innerHTML = FileManager.renderFileGallery(files, productId);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        await FileManager.loadThumbnails();
+    }
+
+    async function removeProductFile(fileId, productId) {
+        const ok = await confirmDialog('Excluir Arquivo', 'Tem certeza que deseja excluir este arquivo?');
+        if (!ok) return;
+        await FileManager.deleteFile(fileId);
+        showToast('Arquivo removido.', 'success');
+        await refreshProductFiles(productId);
+    }
+
+    async function downloadProductZip(id) {
+        try {
+            showToast('Gerando ZIP do produto...', 'info');
+            await Database.exportProductZip(id);
+            showToast('ZIP gerado!', 'success');
+        } catch (err) {
+            showToast('Erro: ' + err.message, 'danger');
+        }
     }
 
     // ==========================================
@@ -432,27 +899,18 @@ const App = (() => {
         const products = Storage.getSheet('PRODUCTS');
         const users = Storage.getSheet('USERS');
 
-        // VENDEDOR vê apenas suas vendas
         if (!Auth.isAdmin()) {
             sales = sales.filter(s => s.vendedor_id === user.id);
         }
 
-        // Aplica filtros
         const dateStart = document.getElementById('filter-date-start')?.value;
-        const dateEnd   = document.getElementById('filter-date-end')?.value;
+        const dateEnd = document.getElementById('filter-date-end')?.value;
         const vendedorFilter = document.getElementById('filter-vendedor')?.value;
 
-        if (dateStart) {
-            sales = sales.filter(s => s.data_venda >= dateStart);
-        }
-        if (dateEnd) {
-            sales = sales.filter(s => s.data_venda <= dateEnd + 'T23:59:59');
-        }
-        if (vendedorFilter) {
-            sales = sales.filter(s => s.vendedor_id === parseInt(vendedorFilter));
-        }
+        if (dateStart) sales = sales.filter(s => s.data_venda >= dateStart);
+        if (dateEnd) sales = sales.filter(s => s.data_venda <= dateEnd + 'T23:59:59');
+        if (vendedorFilter) sales = sales.filter(s => s.vendedor_id === parseInt(vendedorFilter));
 
-        // Popula filtro de vendedores (somente ADMIN)
         if (Auth.isAdmin()) {
             const filterSelect = document.getElementById('filter-vendedor');
             if (filterSelect) {
@@ -468,199 +926,212 @@ const App = (() => {
             }
         }
 
-        // Ordena por data (mais recente primeiro)
         sales.sort((a, b) => new Date(b.data_venda) - new Date(a.data_venda));
 
-        // Resumo
         const totalVendas = sales.reduce((sum, s) => sum + (parseFloat(s.valor_venda) || 0), 0);
-        const totalLucro  = sales.reduce((sum, s) => sum + (parseFloat(s.lucro) || 0), 0);
+        const totalLucro = sales.reduce((sum, s) => sum + (parseFloat(s.lucro) || 0), 0);
         const summaryEl = document.getElementById('sales-summary');
         if (summaryEl) {
             summaryEl.innerHTML = `
-                <span>Total: <strong>${Calculator.formatCurrency(totalVendas)}</strong></span>
-                <span>Lucro: <strong class="${totalLucro >= 0 ? 'text-success' : 'text-danger'}">${Calculator.formatCurrency(totalLucro)}</strong></span>
-                <span>Registros: <strong>${sales.length}</strong></span>
-            `;
+                <span>Total: <strong>${fmtC(totalVendas)}</strong></span>
+                <span>Lucro: <strong class="${totalLucro >= 0 ? 'text-success' : 'text-danger'}">${fmtC(totalLucro)}</strong></span>
+                <span>Registros: <strong>${sales.length}</strong></span>`;
         }
 
-        // Tabela
         const tbody = document.getElementById('sales-body');
         if (!tbody) return;
 
         if (sales.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" class="text-center text-muted" style="padding: 2.5rem;">
-                        <div class="empty-state">
-                            <div class="empty-icon"><i data-lucide="wallet"></i></div>
-                            <p>Nenhuma venda encontrada.</p>
-                        </div>
-                    </td>
-                </tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:2.5rem;"><div class="empty-state"><div class="empty-icon"><i data-lucide="wallet"></i></div><p>Nenhuma venda encontrada.</p></div></td></tr>`;
+            refreshLucideIcons();
             return;
         }
 
         tbody.innerHTML = sales.map(s => {
-            const product  = products.find(p => p.id === s.product_id);
+            const product = products.find(p => p.id === s.product_id);
             const vendedor = users.find(u => u.id === s.vendedor_id);
             const lucroClass = (parseFloat(s.lucro) || 0) >= 0 ? 'text-success' : 'text-danger';
+            const desconto = s.desconto_percentual ? s.desconto_percentual + '%' : '—';
+            const cupom = s.cupom_codigo || '—';
 
             return `<tr>
                 <td>${Dashboard.formatDate(s.data_venda)}</td>
                 <td><strong>${escapeHtml(product ? product.nome : 'Removido')}</strong></td>
                 <td>${escapeHtml(s.cliente || '—')}</td>
-                <td>${Calculator.formatCurrency(s.valor_venda)}</td>
-                <td class="${lucroClass}">${Calculator.formatCurrency(s.lucro)}</td>
+                <td>${fmtC(s.valor_venda)}</td>
+                <td>${desconto}</td>
+                <td class="${lucroClass}">${fmtC(s.lucro)}</td>
+                <td>${cupom !== '—' ? `<code>${escapeHtml(cupom)}</code>` : '—'}</td>
                 <td>${escapeHtml(vendedor ? vendedor.nome : '—')}</td>
             </tr>`;
         }).join('');
+
+        refreshLucideIcons();
     }
 
-    // ------------------------------------------
-    // Modal de nova venda
-    // ------------------------------------------
-    function openSaleModal() {
-        const products = Storage.getSheet('PRODUCTS');
+    async function openSaleModal() {
+        const products = await Database.getAll(Database.STORES.PRODUCTS);
+        const activeProducts = products.filter(p => p.ativo !== false);
 
-        if (products.length === 0) {
+        if (activeProducts.length === 0) {
             showToast('Cadastre um produto antes de registrar vendas.', 'warning');
             return;
         }
 
-        const options = products.map(p =>
-            `<option value="${p.id}"
-                     data-preco="${p.preco_venda}"
-                     data-custo="${p.custo_total}">
-                ${escapeHtml(p.nome)} — ${Calculator.formatCurrency(p.preco_venda)}
-            </option>`
+        const options = activeProducts.map(p =>
+            `<option value="${p.id}" data-preco="${p.preco_venda}" data-custo="${p.custo_total}">${escapeHtml(p.nome)} — ${fmtC(p.preco_venda)}</option>`
         ).join('');
 
         const now = new Date();
         const defaultDate = now.toISOString().slice(0, 16);
 
         const html = `
-            <form id="sale-form" onsubmit="event.preventDefault(); App.saveSale();">
+        <form id="sale-form" onsubmit="event.preventDefault(); App.saveSale();">
+            <div class="form-group">
+                <label>Produto</label>
+                <select id="sale-product" required onchange="App.calcSalePreview()">
+                    <option value="">— Selecione um produto —</option>
+                    ${options}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Nome do Cliente</label>
+                <input type="text" id="sale-cliente" placeholder="Nome do cliente (opcional)">
+            </div>
+            <div class="form-grid">
                 <div class="form-group">
-                    <label>Produto</label>
-                    <select id="sale-product" required onchange="App.calcSalePreview()">
-                        <option value="">— Selecione um produto —</option>
-                        ${options}
-                    </select>
+                    <label>Desconto (%)</label>
+                    <input type="number" id="sale-desconto" value="0" min="0" max="100" step="0.5" oninput="App.calcSalePreview()">
                 </div>
                 <div class="form-group">
-                    <label>Nome do Cliente</label>
-                    <input type="text" id="sale-cliente" placeholder="Nome do cliente (opcional)">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Desconto (%)</label>
-                        <input type="number" id="sale-desconto"
-                               value="0" min="0" max="100" step="0.5"
-                               oninput="App.calcSalePreview()">
-                        <small>Desconto sobre o preço de venda</small>
+                    <label>Cupom</label>
+                    <div style="display:flex;gap:0.5rem;">
+                        <input type="text" id="sale-cupom" placeholder="Código do cupom" style="text-transform:uppercase">
+                        <button type="button" class="btn btn-secondary" onclick="App.applySaleCoupon()">Aplicar</button>
                     </div>
-                    <div class="form-group">
-                        <label>Data da Venda</label>
-                        <input type="datetime-local" id="sale-data" value="${defaultDate}">
-                    </div>
+                    <small id="sale-cupom-msg" class="text-muted"></small>
                 </div>
-
-                <div id="sale-preview" class="calc-preview" style="display:none;">
-                    <h4><i data-lucide="receipt"></i> Resumo da Venda</h4>
-                    <div class="calc-grid">
-                        <div class="calc-item">
-                            <span>Preço Original</span>
-                            <span id="sale-preco-original">—</span>
-                        </div>
-                        <div class="calc-item">
-                            <span>Desconto</span>
-                            <span id="sale-desconto-valor" class="text-warning">—</span>
-                        </div>
-                        <div class="calc-item total">
-                            <span>Valor Final</span>
-                            <span id="sale-valor-final">—</span>
-                        </div>
-                        <div class="calc-item success">
-                            <span>Lucro</span>
-                            <span id="sale-lucro">—</span>
-                        </div>
-                    </div>
+                <div class="form-group">
+                    <label>Data da Venda</label>
+                    <input type="datetime-local" id="sale-data" value="${defaultDate}">
                 </div>
-
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Registrar Venda</button>
+            </div>
+            <div id="sale-preview" class="calc-preview" style="display:none;">
+                <h4><i data-lucide="receipt"></i> Resumo</h4>
+                <div class="calc-grid">
+                    <div class="calc-item"><span>Preço Original</span><span id="sale-preco-original">—</span></div>
+                    <div class="calc-item"><span>Desconto</span><span id="sale-desconto-valor" class="text-warning">—</span></div>
+                    <div class="calc-item total"><span>Valor Final</span><span id="sale-valor-final">—</span></div>
+                    <div class="calc-item success"><span>Lucro</span><span id="sale-lucro">—</span></div>
                 </div>
-            </form>
-        `;
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Registrar Venda</button>
+            </div>
+        </form>`;
 
         openModal('Nova Venda', html);
     }
 
-    // ------------------------------------------
-    // Preview em tempo real da venda
-    // ------------------------------------------
     function calcSalePreview() {
         const select = document.getElementById('sale-product');
-        const option = select.options[select.selectedIndex];
-
+        const option = select?.options[select.selectedIndex];
         if (!option || !option.value) {
-            document.getElementById('sale-preview').style.display = 'none';
+            const p = document.getElementById('sale-preview');
+            if (p) p.style.display = 'none';
             return;
         }
 
-        const preco    = parseFloat(option.dataset.preco) || 0;
-        const custo    = parseFloat(option.dataset.custo) || 0;
-        const desconto = parseFloat(document.getElementById('sale-desconto').value) || 0;
+        const preco = parseFloat(option.dataset.preco) || 0;
+        const custo = parseFloat(option.dataset.custo) || 0;
+        const desconto = parseFloat(document.getElementById('sale-desconto')?.value) || 0;
 
         const descontoValor = preco * (desconto / 100);
-        const valorFinal    = preco - descontoValor;
-        const lucro         = valorFinal - custo;
+        const valorFinal = preco - descontoValor;
+        const lucro = valorFinal - custo;
 
         document.getElementById('sale-preview').style.display = 'block';
-        document.getElementById('sale-preco-original').textContent = Calculator.formatCurrency(preco);
-        document.getElementById('sale-desconto-valor').textContent = `- ${Calculator.formatCurrency(descontoValor)}`;
-        document.getElementById('sale-valor-final').textContent    = Calculator.formatCurrency(valorFinal);
-
+        setText('sale-preco-original', fmtC(preco));
+        setText('sale-desconto-valor', `- ${fmtC(descontoValor)}`);
+        setText('sale-valor-final', fmtC(valorFinal));
         const lucroEl = document.getElementById('sale-lucro');
-        lucroEl.textContent = Calculator.formatCurrency(lucro);
-        lucroEl.className = lucro >= 0 ? 'text-success' : 'text-danger';
+        if (lucroEl) {
+            lucroEl.textContent = fmtC(lucro);
+            lucroEl.className = lucro >= 0 ? 'text-success' : 'text-danger';
+        }
     }
 
-    // ------------------------------------------
-    // Salva a venda
-    // ------------------------------------------
-    function saveSale() {
-        const select = document.getElementById('sale-product');
-        const option = select.options[select.selectedIndex];
+    async function applySaleCoupon() {
+        const code = document.getElementById('sale-cupom')?.value.trim();
+        const msgEl = document.getElementById('sale-cupom-msg');
+        if (!code) { if (msgEl) msgEl.textContent = ''; return; }
 
-        if (!option || !option.value) {
-            showToast('Selecione um produto.', 'warning');
+        const productId = parseInt(document.getElementById('sale-product')?.value);
+        const result = await Promotions.validateCoupon(code, productId || null);
+
+        if (!result.valid) {
+            if (msgEl) { msgEl.textContent = result.message; msgEl.className = 'text-danger'; }
             return;
         }
 
-        const productId  = parseInt(option.value);
-        const preco      = parseFloat(option.dataset.preco) || 0;
-        const custo      = parseFloat(option.dataset.custo) || 0;
-        const desconto   = parseFloat(document.getElementById('sale-desconto').value) || 0;
-        const cliente    = document.getElementById('sale-cliente').value.trim();
-        const dataVenda  = document.getElementById('sale-data').value;
+        if (msgEl) { msgEl.textContent = `✓ Cupom válido! ${result.coupon.tipo_desconto === 'percentual' ? result.coupon.valor_desconto + '% off' : 'R$' + result.coupon.valor_desconto + ' off'}`; msgEl.className = 'text-success'; }
+
+        // Apply discount to form
+        const select = document.getElementById('sale-product');
+        const option = select?.options[select.selectedIndex];
+        if (option && option.value) {
+            const preco = parseFloat(option.dataset.preco) || 0;
+            const newPrice = await Promotions.applyCoupon(result.coupon, preco);
+            const pct = preco > 0 ? ((preco - newPrice) / preco * 100) : 0;
+            document.getElementById('sale-desconto').value = pct.toFixed(1);
+            calcSalePreview();
+        }
+    }
+
+    async function saveSale() {
+        const select = document.getElementById('sale-product');
+        const option = select?.options[select.selectedIndex];
+        if (!option || !option.value) { showToast('Selecione um produto.', 'warning'); return; }
+
+        const productId = parseInt(option.value);
+        const preco = parseFloat(option.dataset.preco) || 0;
+        const custo = parseFloat(option.dataset.custo) || 0;
+        const desconto = parseFloat(document.getElementById('sale-desconto')?.value) || 0;
+        const cliente = document.getElementById('sale-cliente')?.value.trim() || '';
+        const dataVenda = document.getElementById('sale-data')?.value;
+        const cupomCode = document.getElementById('sale-cupom')?.value.trim().toUpperCase() || '';
 
         const valorVenda = Calculator.round2(preco * (1 - desconto / 100));
-        const lucro      = Calculator.round2(valorVenda - custo);
-
+        const lucro = Calculator.round2(valorVenda - custo);
         const user = Auth.getCurrentUser();
+
+        // If coupon was used, increment usage
+        if (cupomCode) {
+            const coupon = await Promotions.getCouponByCode(cupomCode);
+            if (coupon) await Promotions.useCoupon(coupon.id);
+        }
+
+        // Decrement stock
+        const product = await Database.getById(Database.STORES.PRODUCTS, productId);
+        if (product && product.quantidade_estoque > 0) {
+            await Database.update(Database.STORES.PRODUCTS, productId, {
+                quantidade_estoque: product.quantidade_estoque - 1
+            });
+        }
 
         Storage.addRow('SALES', {
             product_id: productId,
             vendedor_id: user.id,
-            cliente: cliente || '',
+            cliente,
             valor_venda: valorVenda,
-            lucro: lucro,
+            lucro,
+            desconto_percentual: desconto,
+            cupom_codigo: cupomCode || null,
             data_venda: dataVenda || new Date().toISOString()
         });
 
-        showToast('Venda registrada com sucesso!', 'success');
+        showToast('Venda registrada!', 'success');
         closeModal();
         renderSales();
     }
@@ -670,12 +1141,277 @@ const App = (() => {
     }
 
     // ==========================================
+    //  PROMOÇÕES E CUPONS
+    // ==========================================
+
+    function switchPromoTab(tab) {
+        document.querySelectorAll('.sub-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.subtab === tab);
+        });
+        document.querySelectorAll('.subtab-content').forEach(el => {
+            el.classList.toggle('active', el.id === 'subtab-' + tab);
+        });
+    }
+
+    async function renderPromotions() {
+        await renderPromotionsList();
+        await renderCouponsList();
+    }
+
+    async function renderPromotionsList() {
+        const promos = await Promotions.getPromotionsWithProducts();
+        const tbody = document.getElementById('promotions-body');
+        if (!tbody) return;
+
+        if (promos.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:2rem;">Nenhuma promoção criada.</td></tr>`;
+            refreshLucideIcons();
+            return;
+        }
+
+        const now = new Date().toISOString();
+        tbody.innerHTML = promos.map(p => {
+            const isActive = p.ativo && (!p.data_fim || p.data_fim >= now);
+            const statusBadge = isActive ? '<span class="badge badge-success">Ativa</span>' : '<span class="badge badge-secondary">Inativa</span>';
+            const desc = p.tipo_desconto === 'percentual' ? p.valor_desconto + '%' : fmtC(p.valor_desconto);
+            const periodo = `${p.data_inicio ? new Date(p.data_inicio).toLocaleDateString('pt-BR') : '—'} a ${p.data_fim ? new Date(p.data_fim).toLocaleDateString('pt-BR') : 'Indefinido'}`;
+
+            return `<tr>
+                <td><strong>${escapeHtml(p._product_nome)}</strong></td>
+                <td>${fmtC(p._product_preco)}</td>
+                <td>${desc}</td>
+                <td>${fmtC(p.preco_promocional)}</td>
+                <td>${periodo}</td>
+                <td>${statusBadge}</td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.togglePromotion(${p.id})" title="${p.ativo ? 'Desativar' : 'Ativar'}"><i data-lucide="${p.ativo ? 'pause' : 'play'}"></i></button>
+                    <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deletePromotion(${p.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        refreshLucideIcons();
+    }
+
+    async function openPromotionModal() {
+        const products = await Database.getAll(Database.STORES.PRODUCTS);
+        const activeProducts = products.filter(p => p.ativo !== false);
+
+        if (activeProducts.length === 0) {
+            showToast('Cadastre um produto primeiro.', 'warning');
+            return;
+        }
+
+        const options = activeProducts.map(p =>
+            `<option value="${p.id}" data-preco="${p.preco_venda}">${escapeHtml(p.nome)} — ${fmtC(p.preco_venda)}</option>`
+        ).join('');
+
+        const html = `
+        <form onsubmit="event.preventDefault(); App.savePromotion();">
+            <div class="form-group">
+                <label>Produto</label>
+                <select id="promo-product" required><option value="">— Selecione —</option>${options}</select>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Tipo de Desconto</label>
+                    <select id="promo-tipo"><option value="percentual">Percentual (%)</option><option value="fixo">Valor Fixo (R$)</option></select>
+                </div>
+                <div class="form-group">
+                    <label>Valor do Desconto</label>
+                    <input type="number" id="promo-valor" required step="0.01" min="0.01" placeholder="Ex: 15">
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Data Início</label>
+                    <input type="date" id="promo-inicio" value="${new Date().toISOString().slice(0, 10)}">
+                </div>
+                <div class="form-group">
+                    <label>Data Fim (opcional)</label>
+                    <input type="date" id="promo-fim">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Criar Promoção</button>
+            </div>
+        </form>`;
+
+        openModal('Nova Promoção', html);
+    }
+
+    async function savePromotion() {
+        const data = {
+            product_id: parseInt(document.getElementById('promo-product')?.value),
+            tipo_desconto: document.getElementById('promo-tipo')?.value,
+            valor_desconto: parseFloat(document.getElementById('promo-valor')?.value),
+            data_inicio: document.getElementById('promo-inicio')?.value || new Date().toISOString(),
+            data_fim: document.getElementById('promo-fim')?.value || null
+        };
+        try {
+            await Promotions.savePromotion(data);
+            showToast('Promoção criada!', 'success');
+            closeModal();
+            await renderPromotionsList();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }
+
+    async function togglePromotion(id) {
+        try {
+            await Promotions.togglePromotion(id);
+            await renderPromotionsList();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }
+
+    async function deletePromotion(id) {
+        const ok = await confirmDialog('Excluir Promoção', 'Tem certeza que deseja excluir esta promoção?');
+        if (!ok) return;
+        await Promotions.deletePromotion(id);
+        showToast('Promoção excluída.', 'success');
+        await renderPromotionsList();
+    }
+
+    // --- CUPONS ---
+
+    async function renderCouponsList() {
+        const coupons = await Promotions.getAllCoupons();
+        const tbody = document.getElementById('coupons-body');
+        if (!tbody) return;
+
+        if (coupons.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:2rem;">Nenhum cupom criado.</td></tr>`;
+            refreshLucideIcons();
+            return;
+        }
+
+        const now = new Date().toISOString().slice(0, 10);
+        tbody.innerHTML = coupons.map(c => {
+            const expired = c.data_validade && c.data_validade < now;
+            const exhausted = c.limite_usos > 0 && c.usos_realizados >= c.limite_usos;
+            const isActive = c.ativo && !expired && !exhausted;
+            const statusBadge = isActive ? '<span class="badge badge-success">Ativo</span>' : expired ? '<span class="badge badge-danger">Expirado</span>' : exhausted ? '<span class="badge badge-warning">Esgotado</span>' : '<span class="badge badge-secondary">Inativo</span>';
+            const tipoStr = c.tipo_desconto === 'percentual' ? c.valor_desconto + '%' : fmtC(c.valor_desconto);
+            const usos = c.limite_usos > 0 ? `${c.usos_realizados}/${c.limite_usos}` : `${c.usos_realizados || 0}/∞`;
+
+            return `<tr>
+                <td><code>${escapeHtml(c.codigo)}</code></td>
+                <td>${c.tipo_desconto === 'percentual' ? 'Percentual' : 'Fixo'}</td>
+                <td>${tipoStr}</td>
+                <td>${c.data_validade ? new Date(c.data_validade + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem validade'}</td>
+                <td>${usos}</td>
+                <td>${statusBadge}</td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.toggleCoupon(${c.id})" title="${c.ativo ? 'Desativar' : 'Ativar'}"><i data-lucide="${c.ativo ? 'pause' : 'play'}"></i></button>
+                    <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteCoupon(${c.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        refreshLucideIcons();
+    }
+
+    async function openCouponModal() {
+        const generatedCode = Promotions.generateCouponCode();
+        const categories = await Categories.getAll();
+
+        const catCheckboxes = categories.map(c =>
+            `<label class="checkbox-label"><input type="checkbox" value="${c.id}" class="coupon-cat-cb"> ${escapeHtml(c.nome)}</label>`
+        ).join('');
+
+        const html = `
+        <form onsubmit="event.preventDefault(); App.saveCoupon();">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Código do Cupom</label>
+                    <input type="text" id="coupon-codigo" value="${generatedCode}" required style="text-transform:uppercase;font-family:monospace;font-size:1.1rem;">
+                    <small>Gerado automaticamente, pode editar</small>
+                </div>
+                <div class="form-group">
+                    <label>Tipo de Desconto</label>
+                    <select id="coupon-tipo"><option value="percentual">Percentual (%)</option><option value="fixo">Valor Fixo (R$)</option></select>
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Valor do Desconto</label>
+                    <input type="number" id="coupon-valor" required step="0.01" min="0.01" placeholder="Ex: 10">
+                </div>
+                <div class="form-group">
+                    <label>Data de Validade</label>
+                    <input type="date" id="coupon-validade">
+                    <small>Deixe vazio para sem validade</small>
+                </div>
+                <div class="form-group">
+                    <label>Limite de Usos</label>
+                    <input type="number" id="coupon-limite" value="0" min="0" step="1">
+                    <small>0 = usos ilimitados</small>
+                </div>
+            </div>
+            ${categories.length > 0 ? `
+            <div class="form-group">
+                <label>Restringir a Categorias (opcional)</label>
+                <div class="checkbox-group">${catCheckboxes}</div>
+                <small>Sem seleção = todas as categorias</small>
+            </div>` : ''}
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Criar Cupom</button>
+            </div>
+        </form>`;
+
+        openModal('Novo Cupom', html);
+    }
+
+    async function saveCoupon() {
+        const catCbs = document.querySelectorAll('.coupon-cat-cb:checked');
+        const categorias = Array.from(catCbs).map(cb => parseInt(cb.value));
+
+        const data = {
+            codigo: document.getElementById('coupon-codigo')?.value.trim(),
+            tipo_desconto: document.getElementById('coupon-tipo')?.value,
+            valor_desconto: parseFloat(document.getElementById('coupon-valor')?.value),
+            data_validade: document.getElementById('coupon-validade')?.value || null,
+            limite_usos: parseInt(document.getElementById('coupon-limite')?.value) || 0,
+            categorias
+        };
+        try {
+            await Promotions.saveCoupon(data);
+            showToast('Cupom criado!', 'success');
+            closeModal();
+            await renderCouponsList();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }
+
+    async function toggleCoupon(id) {
+        try {
+            await Promotions.toggleCoupon(id);
+            await renderCouponsList();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }
+
+    async function deleteCoupon(id) {
+        const ok = await confirmDialog('Excluir Cupom', 'Tem certeza que deseja excluir este cupom?');
+        if (!ok) return;
+        await Promotions.deleteCoupon(id);
+        showToast('Cupom excluído.', 'success');
+        await renderCouponsList();
+    }
+
+    // ==========================================
     //  CONFIGURAÇÕES
     // ==========================================
 
     function renderSettings() {
         if (!Auth.isAdmin()) return;
-
         const s = Calculator.getSettings();
         setInputVal('cfg-margem', s.margem_padrao);
         setInputVal('cfg-custo-kg', s.custo_kg);
@@ -688,20 +1424,16 @@ const App = (() => {
 
     function saveSettings() {
         if (!Auth.isAdmin()) return;
-
         const settings = [{
-            margem_padrao:         parseFloat(document.getElementById('cfg-margem').value)     || 0,
-            custo_kg:              parseFloat(document.getElementById('cfg-custo-kg').value)   || 0,
-            custo_hora_maquina:    parseFloat(document.getElementById('cfg-custo-hora').value) || 0,
-            custo_kwh:             parseFloat(document.getElementById('cfg-custo-kwh').value)  || 0,
-            consumo_maquina_w:     parseFloat(document.getElementById('cfg-consumo-w').value)  || 350,
-            percentual_falha:      parseFloat(document.getElementById('cfg-falha').value)      || 0,
-            depreciacao_percentual:parseFloat(document.getElementById('cfg-depreciacao').value) || 0
+            margem_padrao:          parseFloat(document.getElementById('cfg-margem').value) || 0,
+            custo_kg:               parseFloat(document.getElementById('cfg-custo-kg').value) || 0,
+            custo_hora_maquina:     parseFloat(document.getElementById('cfg-custo-hora').value) || 0,
+            custo_kwh:              parseFloat(document.getElementById('cfg-custo-kwh').value) || 0,
+            consumo_maquina_w:      parseFloat(document.getElementById('cfg-consumo-w').value) || 350,
+            percentual_falha:       parseFloat(document.getElementById('cfg-falha').value) || 0,
+            depreciacao_percentual: parseFloat(document.getElementById('cfg-depreciacao').value) || 0
         }];
-
         Storage.setSheet('SETTINGS', settings);
-
-        // Recalcula todos os produtos com novos parâmetros
         const updated = Calculator.recalcularTodosProdutos();
         showToast(`Configurações salvas! ${updated.length} produto(s) recalculado(s).`, 'success');
     }
@@ -712,7 +1444,6 @@ const App = (() => {
 
     function renderUsers() {
         if (!Auth.isAdmin()) return;
-
         const users = Storage.getSheet('USERS');
         const tbody = document.getElementById('users-body');
         if (!tbody) return;
@@ -729,141 +1460,94 @@ const App = (() => {
                 <td>${escapeHtml(u.email)}</td>
                 <td><span class="badge badge-${badgeType}">${u.tipo}</span></td>
                 <td class="actions">
-                    <button class="btn btn-sm btn-icon" onclick="App.openUserModal(${u.id})" title="Editar">✏️</button>
-                    <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteUser(${u.id})" title="Excluir">🗑️</button>
+                    <button class="btn btn-sm btn-icon" onclick="App.openUserModal(${u.id})" title="Editar"><i data-lucide="pencil"></i></button>
+                    <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteUser(${u.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
                 </td>
             </tr>`;
         }).join('');
     }
 
-    // ------------------------------------------
-    // Modal de usuário (novo ou edição)
-    // ------------------------------------------
     function openUserModal(id) {
         editingUserId = id || null;
         const user = id ? Storage.getRowById('USERS', id) : null;
         const title = user ? 'Editar Usuário' : 'Novo Usuário';
 
         const html = `
-            <form id="user-form" onsubmit="event.preventDefault(); App.saveUser();">
-                <div class="form-group">
-                    <label>Nome Completo</label>
-                    <input type="text" id="user-nome"
-                           value="${user ? escapeHtml(user.nome) : ''}"
-                           required placeholder="Nome do usuário">
-                </div>
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="user-email"
-                           value="${user ? escapeHtml(user.email) : ''}"
-                           required placeholder="email@exemplo.com">
-                </div>
-                <div class="form-group">
-                    <label>Senha ${user ? '<small>(deixe vazio para manter a atual)</small>' : ''}</label>
-                    <input type="password" id="user-senha"
-                           ${user ? '' : 'required'}
-                           placeholder="${user ? 'Manter senha atual' : 'Digite a senha'}">
-                </div>
-                <div class="form-group">
-                    <label>Tipo de Acesso</label>
-                    <select id="user-tipo" required>
-                        <option value="ADMIN" ${user && user.tipo === 'ADMIN' ? 'selected' : ''}>
-                            Administrador
-                        </option>
-                        <option value="VENDEDOR" ${!user || user.tipo === 'VENDEDOR' ? 'selected' : ''}>
-                            Vendedor
-                        </option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i data-lucide="save"></i> ${user ? 'Atualizar' : 'Criar Usuário'}
-                    </button>
-                </div>
-            </form>
-        `;
+        <form id="user-form" onsubmit="event.preventDefault(); App.saveUser();">
+            <div class="form-group">
+                <label>Nome Completo</label>
+                <input type="text" id="user-nome" value="${user ? escapeHtml(user.nome) : ''}" required placeholder="Nome do usuário">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="user-email" value="${user ? escapeHtml(user.email) : ''}" required placeholder="email@exemplo.com">
+            </div>
+            <div class="form-group">
+                <label>Senha ${user ? '<small>(deixe vazio para manter a atual)</small>' : ''}</label>
+                <input type="password" id="user-senha" ${user ? '' : 'required'} placeholder="${user ? 'Manter senha atual' : 'Digite a senha'}">
+            </div>
+            <div class="form-group">
+                <label>Tipo de Acesso</label>
+                <select id="user-tipo" required>
+                    <option value="ADMIN" ${user && user.tipo === 'ADMIN' ? 'selected' : ''}>Administrador</option>
+                    <option value="VENDEDOR" ${!user || user.tipo === 'VENDEDOR' ? 'selected' : ''}>Vendedor</option>
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> ${user ? 'Atualizar' : 'Criar Usuário'}</button>
+            </div>
+        </form>`;
 
         openModal(title, html);
-
-        // Ao editar, selecionar tipo correto (fix para "ADMIN" não pré-selecionado)
-        if (user) {
-            setTimeout(() => {
-                document.getElementById('user-tipo').value = user.tipo;
-            }, 10);
-        }
+        if (user) setTimeout(() => { document.getElementById('user-tipo').value = user.tipo; }, 10);
     }
 
-    // ------------------------------------------
-    // Salva usuário
-    // ------------------------------------------
     function saveUser() {
-        const nome  = document.getElementById('user-nome').value.trim();
+        const nome = document.getElementById('user-nome').value.trim();
         const email = document.getElementById('user-email').value.trim();
         const senha = document.getElementById('user-senha').value;
-        const tipo  = document.getElementById('user-tipo').value;
+        const tipo = document.getElementById('user-tipo').value;
 
-        if (!nome || !email) {
-            showToast('Preencha nome e email.', 'warning');
-            return;
-        }
+        if (!nome || !email) { showToast('Preencha nome e email.', 'warning'); return; }
+        if (!editingUserId && !senha) { showToast('Senha é obrigatória para novos usuários.', 'warning'); return; }
 
-        if (!editingUserId && !senha) {
-            showToast('Senha é obrigatória para novos usuários.', 'warning');
-            return;
-        }
-
-        // Verifica email duplicado
         const users = Storage.getSheet('USERS');
-        const duplicate = users.find(u =>
-            u.email.toLowerCase() === email.toLowerCase() && u.id !== editingUserId
-        );
-        if (duplicate) {
-            showToast('Este email já está em uso.', 'danger');
-            return;
-        }
+        const duplicate = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.id !== editingUserId);
+        if (duplicate) { showToast('Este email já está em uso.', 'danger'); return; }
 
         const data = { nome, email, tipo };
-
-        if (senha) {
-            data.senha_hash = sha256(senha);
-        }
+        if (senha) data.senha_hash = sha256(senha);
 
         if (editingUserId) {
             Storage.updateRow('USERS', editingUserId, data);
             showToast('Usuário atualizado!', 'success');
         } else {
             Storage.addRow('USERS', data);
-            showToast('Usuário criado com sucesso!', 'success');
+            showToast('Usuário criado!', 'success');
         }
-
         closeModal();
         renderUsers();
     }
 
-    // ------------------------------------------
-    // Exclui usuário com proteções
-    // ------------------------------------------
-    function deleteUser(id) {
+    async function deleteUser(id) {
         const users = Storage.getSheet('USERS');
         const user = users.find(u => u.id === id);
         if (!user) return;
 
-        // Protege último admin
         const adminCount = users.filter(u => u.tipo === 'ADMIN').length;
         if (user.tipo === 'ADMIN' && adminCount <= 1) {
             showToast('Não é possível excluir o último administrador.', 'danger');
             return;
         }
-
-        // Protege auto-exclusão
         const currentUser = Auth.getCurrentUser();
         if (id === currentUser.id) {
             showToast('Você não pode excluir sua própria conta.', 'danger');
             return;
         }
 
-        if (!confirm(`Excluir o usuário "${user.nome}"?\nEsta ação não pode ser desfeita.`)) return;
+        const ok = await confirmDialog('Excluir Usuário', `Excluir o usuário "${user.nome}"?\nEsta ação não pode ser desfeita.`);
+        if (!ok) return;
 
         Storage.deleteRow('USERS', id);
         showToast('Usuário excluído.', 'success');
@@ -874,13 +1558,9 @@ const App = (() => {
     //  CALCULADORA AVANÇADA
     // ==========================================
 
-    // ------------------------------------------
-    // Carrega valores das configurações nos inputs
-    // ------------------------------------------
-    function renderCalculator() {
+    async function renderCalculator() {
         const s = Calculator.getSettings();
 
-        // Sincroniza custos variáveis com configurações
         setInputVal('adv-custo-kg', s.custo_kg);
         setInputVal('adv-custo-kwh', s.custo_kwh);
         setInputVal('adv-consumo-w', s.consumo_maquina_w || 350);
@@ -889,79 +1569,56 @@ const App = (() => {
         setInputVal('adv-falhas', (s.percentual_falha || 0) * 100);
         setInputVal('adv-margem', (s.margem_padrao || 0) * 100);
 
-        // Dispara cálculo se já houver dados preenchidos
+        // Populate category select in calculator
+        const catSel = document.getElementById('adv-categoria');
+        if (catSel) {
+            const categories = await Categories.getAll();
+            catSel.innerHTML = categories.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+        }
+
         calcAdvanced();
     }
 
-    // ------------------------------------------
-    // Motor de cálculo avançado completo
-    // Atualiza automaticamente a cada input
-    // ------------------------------------------
     function calcAdvanced() {
-        // === LEITURA DOS INPUTS ===
         const comprimento_m = Math.max(0, parseFloat(document.getElementById('adv-comprimento')?.value) || 0);
-        const diametro_mm   = Math.max(0, parseFloat(document.getElementById('adv-diametro')?.value) || 0);
-        const densidade     = Math.max(0, parseFloat(document.getElementById('adv-densidade')?.value) || 0);
-        const tempo_min     = Math.max(0, parseFloat(document.getElementById('adv-tempo-min')?.value) || 0);
+        const diametro_mm = Math.max(0, parseFloat(document.getElementById('adv-diametro')?.value) || 0);
+        const densidade = Math.max(0, parseFloat(document.getElementById('adv-densidade')?.value) || 0);
+        const tempo_min = Math.max(0, parseFloat(document.getElementById('adv-tempo-min')?.value) || 0);
 
-        const custo_kg      = Math.max(0, parseFloat(document.getElementById('adv-custo-kg')?.value) || 0);
-        const custo_kwh     = Math.max(0, parseFloat(document.getElementById('adv-custo-kwh')?.value) || 0);
-        const consumo_w     = Math.max(0, parseFloat(document.getElementById('adv-consumo-w')?.value) || 0);
-        const custo_hora_maq= Math.max(0, parseFloat(document.getElementById('adv-custo-hora')?.value) || 0);
-        const depreciacao_pc= Math.max(0, parseFloat(document.getElementById('adv-depreciacao')?.value) || 0) / 100;
-        const falhas_pc     = Math.max(0, parseFloat(document.getElementById('adv-falhas')?.value) || 0) / 100;
+        const custo_kg = Math.max(0, parseFloat(document.getElementById('adv-custo-kg')?.value) || 0);
+        const custo_kwh = Math.max(0, parseFloat(document.getElementById('adv-custo-kwh')?.value) || 0);
+        const consumo_w = Math.max(0, parseFloat(document.getElementById('adv-consumo-w')?.value) || 0);
+        const custo_hora_maq = Math.max(0, parseFloat(document.getElementById('adv-custo-hora')?.value) || 0);
+        const depreciacao_pc = Math.max(0, parseFloat(document.getElementById('adv-depreciacao')?.value) || 0) / 100;
+        const falhas_pc = Math.max(0, parseFloat(document.getElementById('adv-falhas')?.value) || 0) / 100;
 
-        const modelagem     = Math.max(0, parseFloat(document.getElementById('adv-modelagem')?.value) || 0);
+        const modelagem = Math.max(0, parseFloat(document.getElementById('adv-modelagem')?.value) || 0);
         const acabamento_pc = Math.max(0, parseFloat(document.getElementById('adv-acabamento')?.value) || 0) / 100;
-        const fixacao       = Math.max(0, parseFloat(document.getElementById('adv-fixacao')?.value) || 0);
-        const outros        = Math.max(0, parseFloat(document.getElementById('adv-outros')?.value) || 0);
+        const fixacao = Math.max(0, parseFloat(document.getElementById('adv-fixacao')?.value) || 0);
+        const outros = Math.max(0, parseFloat(document.getElementById('adv-outros')?.value) || 0);
+        const margem_pc = Math.max(0, parseFloat(document.getElementById('adv-margem')?.value) || 0) / 100;
 
-        const margem_pc     = Math.max(0, parseFloat(document.getElementById('adv-margem')?.value) || 0) / 100;
-
-        // === 1. CÁLCULOS FÍSICOS ===
-        //   Raio em mm
         const raio_mm = diametro_mm / 2;
-        //   Área da seção circular em mm²: A = π × r²
         const area_mm2 = Math.PI * raio_mm * raio_mm;
-        //   Converter mm² para cm²: 1 cm² = 100 mm²
         const area_cm2 = area_mm2 / 100;
-        //   Comprimento em cm (1 m = 100 cm)
         const comprimento_cm = comprimento_m * 100;
-        //   Volume em cm³: Área(cm²) × Comprimento(cm)
         const volume_cm3 = area_cm2 * comprimento_cm;
-        //   Peso em gramas: Volume(cm³) × Densidade(g/cm³)
         const peso_g = volume_cm3 * densidade;
-        //   Tempo em horas
         const tempo_h = tempo_min / 60;
 
-        // Atualiza passos intermediários
         setText('step-raio', raio_mm > 0 ? raio_mm.toFixed(3) + ' mm' : '—');
-        setText('step-area', area_mm2 > 0
-            ? area_mm2.toFixed(4) + ' mm² = ' + area_cm2.toFixed(6) + ' cm²' : '—');
+        setText('step-area', area_mm2 > 0 ? area_mm2.toFixed(4) + ' mm² = ' + area_cm2.toFixed(6) + ' cm²' : '—');
         setText('step-volume', volume_cm3 > 0 ? volume_cm3.toFixed(4) + ' cm³' : '—');
         setText('step-peso', peso_g > 0 ? peso_g.toFixed(2) + ' g' : '—');
-        setText('step-tempo-h', tempo_min > 0
-            ? tempo_min + ' min = ' + tempo_h.toFixed(3) + ' h' : '—');
+        setText('step-tempo-h', tempo_min > 0 ? tempo_min + ' min = ' + tempo_h.toFixed(3) + ' h' : '—');
 
-        // === 2. CUSTOS VARIÁVEIS ===
-        //   Material: (peso_g / 1000) × custo_kg
         const custoMaterial = (peso_g / 1000) * custo_kg;
-
-        //   Energia: (consumo_W / 1000) × tempo_h × custo_kwh
         const energia_kwh = (consumo_w / 1000) * tempo_h;
         const custoEnergia = energia_kwh * custo_kwh;
-
-        //   Depreciação: custo_hora_maquina × tempo_h × percentual
-        //   (baseada no custo/hora real da máquina)
         const custoDepreciacao = custo_hora_maq * tempo_h * depreciacao_pc;
-
-        //   Subtotal antes de falhas
         const subtotal = custoMaterial + custoEnergia + custoDepreciacao;
-
-        //   Falhas: subtotal × percentual
         const custoFalhas = subtotal * falhas_pc;
 
-        // Atualiza passos de custo
         setText('step-custo-material', fmtC(custoMaterial));
         setText('step-energia-kwh', energia_kwh > 0 ? energia_kwh.toFixed(4) + ' kWh' : '—');
         setText('step-custo-energia', fmtC(custoEnergia));
@@ -969,20 +1626,15 @@ const App = (() => {
         setText('step-subtotal', fmtC(subtotal));
         setText('step-custo-falhas', fmtC(custoFalhas));
 
-        // === 3. CUSTOS ADICIONAIS ===
         const custoBase = subtotal + custoFalhas;
         const custoAcabamento = custoBase * acabamento_pc;
         const totalAdicionais = modelagem + custoAcabamento + fixacao + outros;
 
-        // === 4. RESULTADO FINAL ===
         const custoProducao = custoBase + totalAdicionais;
         const precoVenda = custoProducao * (1 + margem_pc);
         const lucro = precoVenda - custoProducao;
-        const margemReal = precoVenda > 0
-            ? ((precoVenda - custoProducao) / precoVenda) * 100
-            : 0;
+        const margemReal = precoVenda > 0 ? ((precoVenda - custoProducao) / precoVenda) * 100 : 0;
 
-        // Atualiza resultado
         setText('res-material', fmtC(custoMaterial));
         setText('res-energia', fmtC(custoEnergia));
         setText('res-depreciacao', fmtC(custoDepreciacao));
@@ -996,17 +1648,11 @@ const App = (() => {
         setText('res-lucro', fmtC(lucro));
         setText('res-margem-real', margemReal.toFixed(1).replace('.', ',') + '%');
 
-        // Alerta de margem baixa
         const alertEl = document.getElementById('margin-alert');
         if (alertEl) {
-            if (custoProducao > 0 && margemReal < 20) {
-                alertEl.classList.remove('hidden');
-            } else {
-                alertEl.classList.add('hidden');
-            }
+            alertEl.classList.toggle('hidden', !(custoProducao > 0 && margemReal < 20));
         }
 
-        // Armazena no estado para uso ao salvar
         calcAdvanced._lastResult = {
             peso_g: Calculator.round2(peso_g),
             tempo_h: Calculator.round2(tempo_h),
@@ -1015,69 +1661,67 @@ const App = (() => {
         };
     }
 
-    // ------------------------------------------
-    // Limpar todos os campos da calculadora
-    // ------------------------------------------
     function calcResetForm() {
-        const ids = [
-            'adv-comprimento', 'adv-tempo-min',
-            'adv-modelagem', 'adv-acabamento', 'adv-fixacao', 'adv-outros',
-            'adv-nome-produto'
-        ];
-        ids.forEach(id => {
+        ['adv-comprimento', 'adv-tempo-min', 'adv-modelagem', 'adv-acabamento', 'adv-fixacao', 'adv-outros', 'adv-nome-produto'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = el.type === 'number' ? '0' : '';
         });
-
-        // Volta valores padrão de filamento
         setInputVal('adv-diametro', 1.75);
         setInputVal('adv-densidade', 1.24);
         setInputVal('adv-comprimento', '');
         setInputVal('adv-tempo-min', '');
-
-        // Re-sincroniza custos com configurações
         renderCalculator();
         showToast('Formulário limpo.', 'info');
     }
 
-    // ------------------------------------------
-    // Salva resultado da calculadora como produto
-    // ------------------------------------------
-    function calcSaveAsProduct() {
+    async function calcSaveAsProduct() {
         const nome = document.getElementById('adv-nome-produto')?.value.trim();
         const result = calcAdvanced._lastResult;
+        const catId = parseInt(document.getElementById('adv-categoria')?.value);
 
         if (!nome) {
             showToast('Informe o nome do produto antes de salvar.', 'warning');
             document.getElementById('adv-nome-produto')?.focus();
             return;
         }
-
         if (!result || result.peso_g <= 0 || result.tempo_h <= 0) {
             showToast('Preencha os dados físicos da peça para calcular.', 'warning');
             return;
         }
 
-        Storage.addRow('PRODUCTS', {
-            nome: nome,
-            peso_g: result.peso_g,
-            tempo_h: result.tempo_h,
-            custo_total: result.custoTotal,
-            preco_venda: result.precoVenda,
-            created_at: new Date().toISOString()
-        });
+        let sku = 'PROD-001';
+        if (catId) {
+            sku = await Database.getNextSKU(catId);
+        }
 
-        showToast(`Produto "${nome}" salvo no catálogo!`, 'success');
-        document.getElementById('adv-nome-produto').value = '';
-    }
-
-    // Auxiliares de exibição
-    function setText(id, val) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = val;
-    }
-    function fmtC(val) {
-        return Calculator.formatCurrency(val);
+        try {
+            await Database.add(Database.STORES.PRODUCTS, {
+                codigo_sku: sku,
+                category_id: catId || null,
+                nome,
+                descricao: '',
+                peso_g: result.peso_g,
+                tempo_h: result.tempo_h,
+                dimensoes: { largura: 0, altura: 0, profundidade: 0 },
+                material: 'PLA',
+                cor: '',
+                resolucao_camada: 0.2,
+                custo_total: result.custoTotal,
+                preco_venda: result.precoVenda,
+                quantidade_estoque: 0,
+                estoque_minimo: 0,
+                tags: [],
+                descricoes_social: { instagram: '', facebook: '', whatsapp: '', tiktok: '', geral: '' },
+                ativo: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            });
+            await Storage.refreshCache();
+            showToast(`Produto "${nome}" salvo no catálogo!`, 'success');
+            document.getElementById('adv-nome-produto').value = '';
+        } catch (err) {
+            showToast('Erro ao salvar: ' + err.message, 'danger');
+        }
     }
 
     // ==========================================
@@ -1090,32 +1734,17 @@ const App = (() => {
 
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-
         const icons = {
             success: '<i data-lucide="check-circle"></i>',
             danger: '<i data-lucide="x-circle"></i>',
             warning: '<i data-lucide="alert-triangle"></i>',
             info: '<i data-lucide="info"></i>'
         };
-
-        toast.innerHTML = `
-            <span class="toast-icon">${icons[type] || '<i data-lucide="info"></i>'}</span>
-            <span>${escapeHtml(message)}</span>
-        `;
-
+        toast.innerHTML = `<span class="toast-icon">${icons[type] || '<i data-lucide="info"></i>'}</span><span>${escapeHtml(message)}</span>`;
         container.appendChild(toast);
-
-        // Inicializa ícones Lucide no toast
         if (typeof lucide !== 'undefined') lucide.createIcons();
-
-        // Anima entrada
         requestAnimationFrame(() => toast.classList.add('show'));
-
-        // Remove após 3.5 segundos
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 350);
-        }, 3500);
+        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 350); }, 3500);
     }
 
     // ==========================================
@@ -1134,37 +1763,45 @@ const App = (() => {
         if (el) el.value = value;
     }
 
+    function setText(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+
+    function fmtC(val) {
+        return Calculator.formatCurrency(val);
+    }
+
+    function refreshLucideIcons() {
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
     // ==========================================
     //  API PÚBLICA
     // ==========================================
     return {
-        init,
-        navigate,
-        // Produtos
-        openProductModal,
-        calcProductPreview,
-        saveProduct,
-        deleteProduct,
-        // Vendas
-        openSaleModal,
-        calcSalePreview,
-        saveSale,
-        filterSales,
-        // Calculadora Avançada
-        calcAdvanced,
-        calcResetForm,
-        calcSaveAsProduct,
-        // Configurações
-        saveSettings,
-        // Usuários
-        openUserModal,
-        saveUser,
-        deleteUser,
-        // UI
-        closeModal,
-        showToast
+        init, navigate, closeModal, showToast,
+        // Categories
+        openCategoryModal, saveCategory, deleteCategory,
+        _selectIcon, _selectColor,
+        // Products
+        openProductModal, saveProduct, deleteProduct,
+        calcProductPreview, switchProductTab, onCategoryChange,
+        toggleProductView, debounceProductSearch, filterProducts,
+        refreshProductFiles, removeProductFile, downloadProductZip,
+        // Sales
+        openSaleModal, calcSalePreview, applySaleCoupon, saveSale, filterSales,
+        // Promotions
+        switchPromoTab, openPromotionModal, savePromotion, togglePromotion, deletePromotion,
+        openCouponModal, saveCoupon, toggleCoupon, deleteCoupon,
+        // Calculator
+        calcAdvanced, calcResetForm, calcSaveAsProduct,
+        // Settings & Users
+        saveSettings, openUserModal, saveUser, deleteUser
     };
 })();
 
 // Inicializa quando o DOM estiver pronto
-document.addEventListener('DOMContentLoaded', App.init);
+document.addEventListener('DOMContentLoaded', () => App.init());

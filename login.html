@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Printh3D Lite — Login</title>
+    <title>Printh3D Pro — Login</title>
+    <link rel="icon" type="image/png" href="assets/images/logo_printh_azul.png">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,10 +42,15 @@
 
                 <div class="form-group">
                     <label for="login-password">Senha</label>
-                    <input type="password" id="login-password"
-                           placeholder="••••••••"
-                           required
-                           autocomplete="current-password">
+                    <div class="password-field">
+                        <input type="password" id="login-password"
+                               placeholder="••••••••"
+                               required
+                               autocomplete="current-password">
+                        <button type="button" class="password-toggle-btn" id="toggle-password-btn" aria-label="Mostrar senha" title="Mostrar senha">
+                            <i data-lucide="eye"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Mensagem de erro -->
@@ -77,45 +83,86 @@
     <!-- SheetJS para manipulação de Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Módulos do sistema -->
+    <script src="js/database.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/auth.js"></script>
 
     <script>
-        // Inicializa ícones Lucide
-        lucide.createIcons();
+        const loginForm = document.getElementById('login-form');
+        const loginButton = loginForm.querySelector('button[type="submit"]');
+        const passwordInput = document.getElementById('login-password');
+        const togglePasswordBtn = document.getElementById('toggle-password-btn');
+        const errorEl = document.getElementById('login-error');
 
-        // Inicializa banco de dados (cria padrão se necessário)
-        Storage.init();
+        let passwordVisible = false;
 
-        // Se já logado, redireciona para o sistema
-        if (Auth.isLoggedIn()) {
-            window.location.href = 'index.html';
+        function setPasswordVisibility(visible) {
+            passwordVisible = visible;
+            passwordInput.type = visible ? 'text' : 'password';
+            togglePasswordBtn.innerHTML = visible
+                ? '<i data-lucide="eye-off"></i>'
+                : '<i data-lucide="eye"></i>';
+            togglePasswordBtn.setAttribute('aria-label', visible ? 'Ocultar senha' : 'Mostrar senha');
+            togglePasswordBtn.setAttribute('title', visible ? 'Ocultar senha' : 'Mostrar senha');
+            lucide.createIcons();
         }
 
+        async function bootstrapLogin() {
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<i data-lucide="loader-2"></i> Carregando...';
+            lucide.createIcons();
+
+            try {
+                await Storage.init();
+            } catch (err) {
+                errorEl.textContent = 'Falha ao inicializar o sistema: ' + err.message;
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            if (Auth.isLoggedIn()) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            loginButton.disabled = false;
+            loginButton.innerHTML = '<i data-lucide="lock"></i> Entrar';
+            lucide.createIcons();
+        }
+
+        // Inicializa ícones Lucide
+        lucide.createIcons();
+        setPasswordVisibility(false);
+
+        // Inicializa banco e libera login
+        bootstrapLogin();
+
         // === Handler do formulário de login ===
-        document.getElementById('login-form').addEventListener('submit', function(e) {
+        loginForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
-            const email    = document.getElementById('login-email').value.trim();
-            const password = document.getElementById('login-password').value;
-            const errorEl  = document.getElementById('login-error');
+            const email = document.getElementById('login-email').value.trim();
+            const password = passwordInput.value;
 
-            // Tenta login
             const result = Auth.login(email, password);
 
             if (result.success) {
-                // Sucesso — redireciona
                 window.location.href = 'index.html';
             } else {
-                // Erro — mostra mensagem com animação shake
                 errorEl.textContent = result.message;
                 errorEl.style.display = 'block';
 
                 const card = document.getElementById('login-card');
                 card.style.animation = 'none';
-                card.offsetHeight; // Force reflow
+                card.offsetHeight;
                 card.style.animation = 'shake 0.5s ease';
             }
+        });
+
+        // === Mostrar/Ocultar senha ===
+        togglePasswordBtn.addEventListener('click', function() {
+            setPasswordVisibility(!passwordVisible);
+            passwordInput.focus();
         });
 
         // === Importar banco de dados ===

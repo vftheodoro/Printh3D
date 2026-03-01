@@ -1,108 +1,85 @@
 // ============================================
-// PRINTH3D LITE — Módulo de Armazenamento
-// Gerencia persistência via localStorage + Excel
+// PRINTH3D PRO — Compatibilidade Storage
+// Camada de compatibilidade que delega para Database (IndexedDB)
+// Mantém API síncrona para módulos legados (auth, calculator)
 // ============================================
 
 const Storage = (() => {
-    const DB_KEY = 'printh3d_database';
+    // Cache in-memory para acesso síncrono
+    let cache = null;
 
-    // ------------------------------------------
-    // Retorna estrutura padrão do banco de dados
-    // com admin e configurações iniciais
-    // ------------------------------------------
     function getDefaultData() {
         return {
-            USERS: [
-                {
-                    id: 1,
-                    nome: 'Administrador',
-                    email: 'admin@printh3d.com',
-                    // SHA-256 de "admin123"
-                    senha_hash: sha256('admin123'),
-                    tipo: 'ADMIN'
-                }
-            ],
-            SETTINGS: [
-                {
-                    margem_padrao: 0.50,         // 50% de margem
-                    custo_kg: 120.00,            // R$ por kg de filamento
-                    custo_hora_maquina: 5.00,    // R$ por hora de impressão
-                    custo_kwh: 0.85,             // R$ por kWh
-                    consumo_maquina_w: 350,      // Watts de consumo médio da impressora
-                    percentual_falha: 0.05,      // 5% de chance de falha
-                    depreciacao_percentual: 0.10 // 10% de depreciação
-                }
-            ],
+            USERS: [{
+                id: 1, nome: 'Administrador', email: 'admin@printh3d.com',
+                senha_hash: sha256('admin123'), tipo: 'ADMIN'
+            }],
+            SETTINGS: [{
+                margem_padrao: 0.50, custo_kg: 120.00, custo_hora_maquina: 5.00,
+                custo_kwh: 0.85, consumo_maquina_w: 350,
+                percentual_falha: 0.05, depreciacao_percentual: 0.10
+            }],
             PRODUCTS: [],
             SALES: []
         };
     }
 
-    // ------------------------------------------
-    // Inicializa o banco na primeira execução
-    // ------------------------------------------
-    function init() {
-        if (!localStorage.getItem(DB_KEY)) {
-            const defaultData = getDefaultData();
-            localStorage.setItem(DB_KEY, JSON.stringify(defaultData));
-            console.log('[Storage] Banco de dados inicializado com dados padrão.');
-        }
+    async function init() {
+        await Database.init();
+        await Database.seedIfEmpty();
+        await refreshCache();
+        console.log('[Storage] Cache carregado do IndexedDB.');
     }
 
-    // ------------------------------------------
-    // Lê todos os dados do localStorage
-    // ------------------------------------------
+    async function refreshCache() {
+        const users = await Database.getAll(Database.STORES.USERS);
+        const settingsArr = await Database.getAll(Database.STORES.SETTINGS);
+        const products = await Database.getAll(Database.STORES.PRODUCTS);
+        const sales = await Database.getAll(Database.STORES.SALES);
+        cache = {
+            USERS: users,
+            SETTINGS: settingsArr.length > 0 ? [settingsArr[0]] : getDefaultData().SETTINGS,
+            PRODUCTS: products,
+            SALES: sales
+        };
+    }
+
     function getData() {
-        const raw = localStorage.getItem(DB_KEY);
-        if (!raw) {
-            const defaultData = getDefaultData();
-            setData(defaultData);
-            return defaultData;
-        }
-        try {
-            return JSON.parse(raw);
-        } catch (e) {
-            console.error('[Storage] Erro ao parsear dados:', e);
-            return getDefaultData();
-        }
+        if (!cache) return getDefaultData();
+        return cache;
     }
 
-    // ------------------------------------------
-    // Grava todos os dados no localStorage
-    // ------------------------------------------
-    function setData(data) {
-        localStorage.setItem(DB_KEY, JSON.stringify(data));
-    }
+    function setData(data) { cache = data; }
 
-    // ------------------------------------------
-    // Retorna array de objetos de uma planilha
-    // ------------------------------------------
     function getSheet(name) {
-        const data = getData();
-        return data[name] || [];
+        if (!cache) return [];
+        return cache[name] || [];
     }
 
-    // ------------------------------------------
-    // Substitui todos os dados de uma planilha
-    // ------------------------------------------
     function setSheet(name, rows) {
-        const data = getData();
-        data[name] = rows;
-        setData(data);
+        if (!cache) cache = getDefaultData();
+        cache[name] = rows;
+        const storeMap = {
+            'USERS': Database.STORES.USERS, 'SETTINGS': Database.STORES.SETTINGS,
+            'PRODUCTS': Database.STORES.PRODUCTS, 'SALES': Database.STORES.SALES
+        };
+        const storeName = storeMap[name];
+        if (storeName) {
+            (async () => {
+                try {
+                    await Database.clearStore(storeName);
+                    for (const row of rows) { await Database.put(storeName, row); }
+                } catch (err) { console.error('[Storage] Erro persistência IndexedDB:', err); }
+            })();
+        }
     }
 
-    // ------------------------------------------
-    // Gera próximo ID auto-incrementável
-    // ------------------------------------------
     function generateId(sheetName) {
         const rows = getSheet(sheetName);
         if (rows.length === 0) return 1;
         return Math.max(...rows.map(r => r.id || 0)) + 1;
     }
 
-    // ------------------------------------------
-    // Adiciona nova linha a uma planilha
-    // ------------------------------------------
     function addRow(sheetName, row) {
         const rows = getSheet(sheetName);
         row.id = generateId(sheetName);
@@ -111,21 +88,15 @@ const Storage = (() => {
         return row;
     }
 
-    // ------------------------------------------
-    // Atualiza uma linha pelo ID
-    // ------------------------------------------
     function updateRow(sheetName, id, newData) {
         const rows = getSheet(sheetName);
         const index = rows.findIndex(r => r.id === id);
         if (index === -1) return false;
-        rows[index] = { ...rows[index], ...newData, id: id };
+        rows[index] = { ...rows[index], ...newData, id };
         setSheet(sheetName, rows);
         return true;
     }
 
-    // ------------------------------------------
-    // Remove uma linha pelo ID
-    // ------------------------------------------
     function deleteRow(sheetName, id) {
         const rows = getSheet(sheetName);
         const filtered = rows.filter(r => r.id !== id);
@@ -134,106 +105,62 @@ const Storage = (() => {
         return true;
     }
 
-    // ------------------------------------------
-    // Busca uma linha pelo ID
-    // ------------------------------------------
     function getRowById(sheetName, id) {
         const rows = getSheet(sheetName);
         return rows.find(r => r.id === id) || null;
     }
 
-    // ------------------------------------------
-    // Importa arquivo .xlsx para o localStorage
-    // Usa SheetJS para parsear o workbook
-    // ------------------------------------------
     function importExcel(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-
             reader.onload = (e) => {
                 try {
                     const workbook = XLSX.read(e.target.result, { type: 'array' });
                     const data = {};
                     const expectedSheets = ['USERS', 'SETTINGS', 'PRODUCTS', 'SALES'];
-
-                    // Extrai cada planilha esperada
                     expectedSheets.forEach(name => {
-                        if (workbook.SheetNames.includes(name)) {
+                        if (workbook.SheetNames.includes(name))
                             data[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name]);
-                        }
                     });
-
-                    // Garante que sheets críticas existam
                     const defaults = getDefaultData();
                     expectedSheets.forEach(name => {
                         if (!data[name] || data[name].length === 0) {
-                            if (name === 'SETTINGS' || name === 'USERS') {
-                                data[name] = defaults[name];
-                            } else if (!data[name]) {
-                                data[name] = [];
-                            }
+                            if (name === 'SETTINGS' || name === 'USERS') data[name] = defaults[name];
+                            else if (!data[name]) data[name] = [];
                         }
                     });
-
                     setData(data);
-                    console.log('[Storage] Excel importado com sucesso.');
+                    expectedSheets.forEach(name => setSheet(name, data[name]));
                     resolve(data);
-                } catch (err) {
-                    console.error('[Storage] Erro ao importar Excel:', err);
-                    reject(err);
-                }
+                } catch (err) { reject(err); }
             };
-
             reader.onerror = () => reject(new Error('Erro ao ler o arquivo.'));
             reader.readAsArrayBuffer(file);
         });
     }
 
-    // ------------------------------------------
-    // Exporta dados atuais como arquivo .xlsx
-    // ------------------------------------------
     function exportExcel() {
         try {
             const data = getData();
             const workbook = XLSX.utils.book_new();
-
             ['USERS', 'SETTINGS', 'PRODUCTS', 'SALES'].forEach(name => {
                 const sheet = XLSX.utils.json_to_sheet(data[name] || []);
                 XLSX.utils.book_append_sheet(workbook, sheet, name);
             });
-
             const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
             XLSX.writeFile(workbook, `printh3d_backup_${timestamp}.xlsx`);
-            console.log('[Storage] Excel exportado com sucesso.');
-        } catch (err) {
-            console.error('[Storage] Erro ao exportar Excel:', err);
-            throw err;
-        }
+        } catch (err) { throw err; }
     }
 
-    // ------------------------------------------
-    // Reseta banco para dados padrão
-    // ------------------------------------------
     function resetToDefaults() {
-        const defaultData = getDefaultData();
-        setData(defaultData);
-        return defaultData;
+        const d = getDefaultData();
+        setData(d);
+        return d;
     }
 
-    // API Pública
     return {
-        init,
-        getData,
-        setData,
-        getSheet,
-        setSheet,
-        generateId,
-        addRow,
-        updateRow,
-        deleteRow,
-        getRowById,
-        importExcel,
-        exportExcel,
-        resetToDefaults
+        init, refreshCache, getData, setData, getSheet, setSheet,
+        generateId, addRow, updateRow, deleteRow, getRowById,
+        importExcel, exportExcel, resetToDefaults
     };
 })();

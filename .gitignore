@@ -1,0 +1,36 @@
+# ============================================
+# PRINTH3D PRO - Git ignore policy
+# Objetivo: impedir versionamento de dados exportados/backup
+# ============================================
+
+# Backups e exportações geradas pelo sistema
+printh3d_backup_*.xlsx
+printh3d_pro_backup_*.xlsx
+printh3d_backup_completo_*.zip
+printh3d_pro_backup_*.zip
+*_backup_*.xlsx
+*_backup_*.xls
+*_backup_*.zip
+
+# Pastas locais sugeridas para dados/exportações
+backups/
+exports/
+data/
+
+# Bancos locais e dumps (caso sejam usados no futuro)
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.dump
+
+# Arquivos temporários de SO/Editor
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+*.log
+
+# Python cache (se scripts auxiliares forem usados)
+__pycache__/
+*.pyc
