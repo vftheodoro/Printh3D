@@ -443,7 +443,7 @@ const App = (() => {
                     const stockClass = (p.estoque_minimo > 0 && p.quantidade_estoque <= p.estoque_minimo) ? 'text-danger' : '';
                     const statusBadge = p.ativo !== false ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-secondary">Inativo</span>';
 
-                    return `<tr>
+                    return `<tr onclick="App.openProductSummary(${p.id})" style="cursor:pointer;" title="Clique para ver o resumo do produto">
                         <td><div class="product-thumb" data-product-id="${p.id}"><i data-lucide="image"></i></div></td>
                         <td><code>${escapeHtml(p.codigo_sku || '—')}</code></td>
                         <td><strong>${escapeHtml(p.nome)}</strong></td>
@@ -455,9 +455,9 @@ const App = (() => {
                         <td class="${margemClass}">${margem.toFixed(1)}%</td>
                         <td>${statusBadge}</td>
                         <td class="actions">
-                            <button class="btn btn-sm btn-icon" onclick="App.openProductModal(${p.id})" title="Editar"><i data-lucide="pencil"></i></button>
-                            <button class="btn btn-sm btn-icon" onclick="App.downloadProductZip(${p.id})" title="ZIP"><i data-lucide="archive"></i></button>
-                            <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteProduct(${p.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
+                            <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.openProductModal(${p.id})" title="Editar"><i data-lucide="pencil"></i></button>
+                            <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.downloadProductZip(${p.id})" title="ZIP"><i data-lucide="archive"></i></button>
+                            <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="event.stopPropagation(); App.deleteProduct(${p.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
                         </td>
                     </tr>`;
                 }).join('');
@@ -473,7 +473,7 @@ const App = (() => {
                 gridEl.innerHTML = products.map(p => {
                     const promo = promotions.find(pr => pr.product_id === p.id && pr.ativo && (!pr.data_fim || pr.data_fim >= now));
                     return `
-                    <div class="product-card" onclick="App.openProductModal(${p.id})">
+                    <div class="product-card" onclick="App.openProductSummary(${p.id})">
                         <div class="product-card-thumb" data-product-id="${p.id}"><i data-lucide="image"></i></div>
                         <div class="product-card-body">
                             <code class="text-muted">${escapeHtml(p.codigo_sku || '')}</code>
@@ -501,6 +501,181 @@ const App = (() => {
                 document.querySelectorAll(`[data-product-id="${p.id}"]`).forEach(el => {
                     el.innerHTML = `<img src="${url}" alt="">`;
                 });
+            }
+        }
+    }
+
+    async function openProductSummary(id) {
+        const product = await Database.getById(Database.STORES.PRODUCTS, id);
+        if (!product) {
+            showToast('Produto não encontrado.', 'warning');
+            return;
+        }
+
+        const [category, promo, files] = await Promise.all([
+            product.category_id ? Categories.getById(product.category_id) : Promise.resolve(null),
+            Promotions.getActivePromotion(id),
+            FileManager.getProductFiles(id)
+        ]);
+
+        const dim = product.dimensoes || {};
+        const social = product.descricoes_social || {};
+        const socialGeral = social.geral || social.instagram || social.facebook || social.whatsapp || social.tiktok || '';
+        const margin = product.preco_venda > 0 ? ((product.preco_venda - product.custo_total) / product.preco_venda * 100) : 0;
+        const estoque = product.quantidade_estoque || 0;
+        const estoqueMinimo = product.estoque_minimo || 0;
+        const estoqueEmAlerta = estoqueMinimo > 0 && estoque <= estoqueMinimo;
+        const tags = Array.isArray(product.tags) ? product.tags.filter(Boolean) : [];
+
+        const fmtDateTime = (value) => {
+            if (!value) return '—';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('pt-BR');
+        };
+
+        const filesByType = {
+            image: files.filter(f => f.tipo === 'image').length,
+            model3d: files.filter(f => f.tipo === 'model3d').length,
+            document: files.filter(f => f.tipo === 'document').length
+        };
+
+        const promoInfo = promo
+            ? `${promo.tipo_desconto === 'percentual' ? promo.valor_desconto + '%' : fmtC(promo.valor_desconto)} • Preço promocional: ${fmtC(promo.preco_promocional)}`
+            : 'Nenhuma promoção ativa';
+
+        const fileTypeLabel = {
+            image: 'Imagem',
+            model3d: 'Modelo 3D',
+            document: 'Documento'
+        };
+
+        const filesListHtml = files.length === 0
+            ? `<p class="text-muted">Nenhum arquivo vinculado.</p>`
+            : `<div class="file-gallery">
+                ${files.map(f => {
+                    const isImage = f.tipo === 'image';
+                    const icon = FileManager.getFileIcon(f.tipo);
+                    const typeLabel = fileTypeLabel[f.tipo] || 'Arquivo';
+                    return `
+                    <div class="file-item">
+                        <div class="file-preview ${isImage ? 'file-preview-image' : ''}">
+                            ${isImage
+                                ? `<img class="file-thumb" data-summary-file-id="${f.id}" alt="${escapeHtml(f.nome_arquivo || '')}">`
+                                : `<i data-lucide="${icon}"></i>`}
+                        </div>
+                        <div class="file-info">
+                            <span class="file-name" title="${escapeHtml(f.nome_arquivo || '')}">${escapeHtml(f.nome_arquivo || 'Arquivo')}</span>
+                            <span class="file-size">${typeLabel} • ${FileManager.formatFileSize(f.tamanho_bytes || 0)}</span>
+                        </div>
+                        <div class="file-actions">
+                            <button type="button" class="btn btn-sm btn-icon" onclick="FileManager.downloadFile(${f.id})" title="Baixar arquivo">
+                                <i data-lucide="download"></i>
+                            </button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+
+        const html = `
+        <div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Produto</label>
+                    <p><strong>${escapeHtml(product.nome || '—')}</strong></p>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <p>${product.ativo !== false ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-secondary">Inativo</span>'}</p>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>SKU</label>
+                    <p><code>${escapeHtml(product.codigo_sku || '—')}</code></p>
+                </div>
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <p>${category ? `<span class="badge" style="background:${category.cor || '#666'}20;color:${category.cor || '#666'};border:1px solid ${category.cor || '#666'}40">${escapeHtml(category.nome)}</span>` : '—'}</p>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Descrição</label>
+                <p>${escapeHtml(product.descricao || '—')}</p>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group"><label>Material</label><p>${escapeHtml(product.material || '—')}</p></div>
+                <div class="form-group"><label>Cor</label><p>${escapeHtml(product.cor || '—')}</p></div>
+                <div class="form-group"><label>Resolução</label><p>${product.resolucao_camada ? `${product.resolucao_camada} mm` : '—'}</p></div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group"><label>Largura</label><p>${dim.largura || 0} mm</p></div>
+                <div class="form-group"><label>Altura</label><p>${dim.altura || 0} mm</p></div>
+                <div class="form-group"><label>Profundidade</label><p>${dim.profundidade || 0} mm</p></div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group"><label>Peso</label><p>${product.peso_g || 0} g</p></div>
+                <div class="form-group"><label>Tempo de impressão</label><p>${product.tempo_h || 0} h</p></div>
+                <div class="form-group"><label>Margem</label><p class="${margin < 20 ? 'text-danger' : 'text-success'}">${margin.toFixed(1)}%</p></div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group"><label>Custo total</label><p>${fmtC(product.custo_total || 0)}</p></div>
+                <div class="form-group"><label>Preço de venda</label><p><strong>${fmtC(product.preco_venda || 0)}</strong></p></div>
+                <div class="form-group"><label>Promoção</label><p>${promoInfo}</p></div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Estoque</label>
+                    <p class="${estoqueEmAlerta ? 'text-danger' : ''}">${estoque}${estoqueEmAlerta ? ' (em alerta)' : ''}</p>
+                </div>
+                <div class="form-group"><label>Estoque mínimo</label><p>${estoqueMinimo}</p></div>
+                <div class="form-group"><label>Tags</label><p>${tags.length ? tags.map(t => `<span class="badge badge-secondary">${escapeHtml(t)}</span>`).join(' ') : '—'}</p></div>
+            </div>
+
+            <div class="form-group">
+                <label>Descrição para redes</label>
+                <p>${escapeHtml(socialGeral || '—')}</p>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group"><label>Arquivos vinculados</label><p>${files.length} arquivo(s)</p></div>
+                <div class="form-group"><label>Imagens / Modelos / Documentos</label><p>${filesByType.image} / ${filesByType.model3d} / ${filesByType.document}</p></div>
+                <div class="form-group"><label>Atualizado em</label><p>${fmtDateTime(product.updated_at || product.created_at)}</p></div>
+            </div>
+
+            <div class="form-group">
+                <label>Arquivos para Visualização / Download</label>
+                ${filesListHtml}
+            </div>
+
+            <div class="form-group">
+                <label>Criado em</label>
+                <p>${fmtDateTime(product.created_at)}</p>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Fechar</button>
+                <button type="button" class="btn btn-secondary" onclick="App.downloadProductZip(${product.id})"><i data-lucide="archive"></i> Exportar ZIP</button>
+                <button type="button" class="btn btn-primary" onclick="App.openProductModal(${product.id})"><i data-lucide="pencil"></i> Editar Produto</button>
+            </div>
+        </div>`;
+
+        openModal('Resumo do Produto', html, true);
+
+        for (const f of files) {
+            if (f.tipo !== 'image') continue;
+            try {
+                const url = await FileManager.getImageThumbnailUrl(f.id);
+                const img = document.querySelector(`img[data-summary-file-id="${f.id}"]`);
+                if (img && url) img.src = url;
+            } catch (e) {
+                // ignora falha de thumbnail
             }
         }
     }
@@ -544,6 +719,7 @@ const App = (() => {
         const p = product || {};
         const dim = p.dimensoes || {};
         const social = p.descricoes_social || {};
+        const socialGeral = social.geral || social.instagram || social.facebook || social.whatsapp || social.tiktok || '';
 
         const html = `
         <div class="modal-tabs">
@@ -674,30 +850,11 @@ const App = (() => {
 
             <!-- TAB: Redes Sociais -->
             <div class="modal-tab-content" id="tab-social">
-                <p class="text-muted" style="font-size:0.85rem;margin-bottom:1rem;">Crie descrições prontas para compartilhar nas redes sociais.</p>
-                <div class="form-group">
-                    <label><i data-lucide="instagram"></i> Instagram</label>
-                    <textarea id="prod-social-ig" rows="3" maxlength="2200" placeholder="Descrição para Instagram...">${escapeHtml(social.instagram || '')}</textarea>
-                    <small class="char-count"><span id="count-ig">${(social.instagram || '').length}</span>/2200</small>
-                </div>
-                <div class="form-group">
-                    <label><i data-lucide="facebook"></i> Facebook</label>
-                    <textarea id="prod-social-fb" rows="3" maxlength="5000" placeholder="Descrição para Facebook...">${escapeHtml(social.facebook || '')}</textarea>
-                    <small class="char-count"><span id="count-fb">${(social.facebook || '').length}</span>/5000</small>
-                </div>
-                <div class="form-group">
-                    <label><i data-lucide="message-circle"></i> WhatsApp</label>
-                    <textarea id="prod-social-wa" rows="3" maxlength="4096" placeholder="Mensagem para WhatsApp...">${escapeHtml(social.whatsapp || '')}</textarea>
-                    <small class="char-count"><span id="count-wa">${(social.whatsapp || '').length}</span>/4096</small>
-                </div>
-                <div class="form-group">
-                    <label><i data-lucide="music"></i> TikTok</label>
-                    <textarea id="prod-social-tk" rows="2" maxlength="2200" placeholder="Descrição para TikTok...">${escapeHtml(social.tiktok || '')}</textarea>
-                    <small class="char-count"><span id="count-tk">${(social.tiktok || '').length}</span>/2200</small>
-                </div>
+                <p class="text-muted" style="font-size:0.85rem;margin-bottom:1rem;">Use uma descrição única para todas as redes sociais.</p>
                 <div class="form-group">
                     <label><i data-lucide="globe"></i> Descrição Geral</label>
-                    <textarea id="prod-social-geral" rows="3" maxlength="5000" placeholder="Descrição geral para marketplace, site, etc...">${escapeHtml(social.geral || '')}</textarea>
+                    <textarea id="prod-social-geral" rows="4" maxlength="5000" placeholder="Descrição única para Instagram, Facebook, WhatsApp, TikTok e marketplace...">${escapeHtml(socialGeral)}</textarea>
+                    <small class="char-count"><span id="count-geral">${socialGeral.length}</span>/5000</small>
                 </div>
             </div>
 
@@ -710,10 +867,7 @@ const App = (() => {
         openModal(title, html, true);
 
         // Setup char counters
-        setupCharCounter('prod-social-ig', 'count-ig');
-        setupCharCounter('prod-social-fb', 'count-fb');
-        setupCharCounter('prod-social-wa', 'count-wa');
-        setupCharCounter('prod-social-tk', 'count-tk');
+        setupCharCounter('prod-social-geral', 'count-geral');
 
         // If editing, show calc preview and load files
         if (product) {
@@ -794,6 +948,7 @@ const App = (() => {
         const calc = Calculator.calcular(peso_g, tempo_h);
         const customPrice = parseFloat(document.getElementById('prod-preco')?.value);
         const precoFinal = (customPrice && customPrice > 0) ? customPrice : calc.precoVenda;
+        const socialGeral = document.getElementById('prod-social-geral')?.value || '';
 
         const data = {
             codigo_sku: sku,
@@ -816,11 +971,11 @@ const App = (() => {
             estoque_minimo: parseInt(document.getElementById('prod-estoque-min')?.value) || 0,
             tags: (document.getElementById('prod-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean),
             descricoes_social: {
-                instagram: document.getElementById('prod-social-ig')?.value || '',
-                facebook: document.getElementById('prod-social-fb')?.value || '',
-                whatsapp: document.getElementById('prod-social-wa')?.value || '',
-                tiktok: document.getElementById('prod-social-tk')?.value || '',
-                geral: document.getElementById('prod-social-geral')?.value || ''
+                instagram: socialGeral,
+                facebook: socialGeral,
+                whatsapp: socialGeral,
+                tiktok: socialGeral,
+                geral: socialGeral
             },
             ativo: document.getElementById('prod-ativo')?.checked !== false,
             updated_at: new Date().toISOString()
@@ -1787,7 +1942,7 @@ const App = (() => {
         openCategoryModal, saveCategory, deleteCategory,
         _selectIcon, _selectColor,
         // Products
-        openProductModal, saveProduct, deleteProduct,
+        openProductSummary, openProductModal, saveProduct, deleteProduct,
         calcProductPreview, switchProductTab, onCategoryChange,
         toggleProductView, debounceProductSearch, filterProducts,
         refreshProductFiles, removeProductFile, downloadProductZip,
