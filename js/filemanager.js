@@ -93,6 +93,24 @@ const FileManager = (() => {
         return URL.createObjectURL(blob);
     }
 
+    async function getProductCoverUrl(product) {
+        if (!product || !product.id) return null;
+        const files = await getProductFiles(product.id);
+        if (!files || files.length === 0) return null;
+
+        let coverImage = null;
+        if (product.cover_file_id) {
+            coverImage = files.find(f => f.id === product.cover_file_id && f.tipo === 'image');
+        }
+        if (!coverImage) {
+            coverImage = files.find(f => f.tipo === 'image');
+        }
+        if (!coverImage || !coverImage.blob) return null;
+
+        const blob = new Blob([coverImage.blob], { type: coverImage.mime_type });
+        return URL.createObjectURL(blob);
+    }
+
     function formatFileSize(bytes) {
         if (bytes === 0) return '0 B';
         const k = 1024;
@@ -111,7 +129,7 @@ const FileManager = (() => {
     }
 
     // Renderiza a galeria de arquivos para o modal de produto
-    function renderFileGallery(files, productId) {
+    function renderFileGallery(files, productId, coverFileId = null) {
         if (!files || files.length === 0) {
             return `
                 <div class="file-gallery-empty">
@@ -127,6 +145,7 @@ const FileManager = (() => {
                     const icon = getFileIcon(f.tipo);
                     const size = formatFileSize(f.tamanho_bytes);
                     const isImage = f.tipo === 'image';
+                    const isCover = isImage && Number(coverFileId) === Number(f.id);
 
                     return `
                         <div class="file-item" data-file-id="${f.id}">
@@ -141,6 +160,10 @@ const FileManager = (() => {
                                 <span class="file-size">${size}</span>
                             </div>
                             <div class="file-actions">
+                                ${isImage ? `
+                                <button type="button" class="btn btn-sm ${isCover ? 'btn-primary' : 'btn-secondary'}" onclick="App.setProductCover(${productId}, ${f.id})" title="${isCover ? 'Imagem de capa atual' : 'Definir como capa'}">
+                                    <i data-lucide="star"></i> ${isCover ? 'Capa' : 'Definir capa'}
+                                </button>` : ''}
                                 <button type="button" class="btn btn-sm btn-icon" onclick="FileManager.downloadFile(${f.id})" title="Baixar">
                                     <i data-lucide="download"></i>
                                 </button>
@@ -280,6 +303,7 @@ const FileManager = (() => {
         getFileBlob,
         getImageThumbnailUrl,
         getFirstImageUrl,
+        getProductCoverUrl,
         formatFileSize,
         getFileIcon,
         renderFileGallery,

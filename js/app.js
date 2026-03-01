@@ -12,6 +12,8 @@ const App = (() => {
     let productViewMode = 'table'; // 'table' | 'grid'
     let searchTimeout = null;
     let _confirmResolve = null;
+    let activeSuggestionType = null;
+    let activeSuggestionIndex = -1;
 
     // ==========================================
     //  INICIALIZAÇÃO (async)
@@ -32,6 +34,7 @@ const App = (() => {
         setupUI();
         setupNavigation();
         setupGlobalListeners();
+        setupSmartSearchSuggestions();
         await initRootStorageStartupFlow();
         await navigate('dashboard');
         hideLoading();
@@ -202,8 +205,228 @@ const App = (() => {
             if (e.key === 'Escape') {
                 closeModal();
                 resolveConfirm(false);
+                hideAllSearchSuggestions();
             }
         });
+
+        document.addEventListener('click', (e) => {
+            const insideSearchBox = e.target.closest('.search-box');
+            if (!insideSearchBox) {
+                hideAllSearchSuggestions();
+            }
+        });
+    }
+
+    function setupSmartSearchSuggestions() {
+        setupSearchInputSuggestions('products', document.getElementById('product-search'));
+        setupSearchInputSuggestions('clients', document.getElementById('client-search'));
+    }
+
+    function setupSearchInputSuggestions(type, inputEl) {
+        if (!inputEl) return;
+        if (inputEl.dataset.smartSuggestReady === '1') return;
+        inputEl.dataset.smartSuggestReady = '1';
+
+        inputEl.addEventListener('input', () => {
+            showSearchSuggestions(type);
+        });
+
+        inputEl.addEventListener('focus', () => {
+            showSearchSuggestions(type);
+        });
+
+        inputEl.addEventListener('keydown', (e) => {
+            handleSearchSuggestionKeydown(type, e);
+        });
+    }
+
+    function getSuggestionContainer(type, create = false) {
+        const inputId = type === 'products' ? 'product-search' : 'client-search';
+        const inputEl = document.getElementById(inputId);
+        if (!inputEl) return null;
+        const searchBox = inputEl.closest('.search-box');
+        if (!searchBox) return null;
+
+        const id = `${type}-search-suggestions`;
+        let container = document.getElementById(id);
+        if (!container && create) {
+            container = document.createElement('div');
+            container.id = id;
+            container.className = 'search-suggestions hidden';
+            searchBox.appendChild(container);
+        }
+        return container;
+    }
+
+    function showSearchSuggestions(type) {
+        const inputId = type === 'products' ? 'product-search' : 'client-search';
+        const inputEl = document.getElementById(inputId);
+        if (!inputEl) return;
+
+        const query = String(inputEl.value || '').trim();
+        if (query.length < 1) {
+            hideSearchSuggestions(type);
+            return;
+        }
+
+        const suggestions = type === 'products'
+            ? getProductSearchSuggestions(query)
+            : getClientSearchSuggestions(query);
+
+        if (suggestions.length === 0) {
+            hideSearchSuggestions(type);
+            return;
+        }
+
+        const container = getSuggestionContainer(type, true);
+        if (!container) return;
+
+        activeSuggestionType = type;
+        activeSuggestionIndex = -1;
+        container.innerHTML = suggestions.map((s, idx) => `
+            <button type="button" class="search-suggestion-item" data-index="${idx}">
+                <span class="search-suggestion-label">${escapeHtml(s.label)}</span>
+                <span class="search-suggestion-meta">${escapeHtml(s.meta)}</span>
+            </button>
+        `).join('');
+
+        container.querySelectorAll('.search-suggestion-item').forEach((btn, idx) => {
+            btn.addEventListener('mouseenter', () => {
+                activeSuggestionIndex = idx;
+                updateSuggestionSelection(type);
+            });
+            btn.addEventListener('click', () => {
+                selectSearchSuggestion(type, suggestions[idx]);
+            });
+        });
+
+        container.classList.remove('hidden');
+    }
+
+    function getProductSearchSuggestions(query) {
+        const products = Storage.getSheet('PRODUCTS') || [];
+        const categories = Storage.getSheet('CATEGORIES') || [];
+        const normQuery = normalizeText(query);
+
+        const scored = products.map(p => {
+            const categoryName = categories.find(c => c.id === p.category_id)?.nome || 'Sem categoria';
+            const fields = [
+                p.nome,
+                p.codigo_sku,
+                p.descricao,
+                p.material,
+                p.cor,
+                categoryName,
+                Array.isArray(p.tags) ? p.tags.join(' ') : ''
+            ];
+            const bestScore = Math.max(...fields.map(f => getSuggestionScore(normQuery, f)));
+            return {
+                score: bestScore,
+                label: p.nome || 'Produto',
+                value: p.nome || '',
+                meta: `${p.codigo_sku || 'Sem SKU'} • ${categoryName}`
+            };
+        }).filter(item => item.score > 0);
+
+        scored.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label, 'pt-BR'));
+        return scored.slice(0, 8);
+    }
+
+    function getClientSearchSuggestions(query) {
+        const clients = Storage.getSheet('CLIENTS') || [];
+        const normQuery = normalizeText(query);
+
+        const scored = clients.map(c => {
+            const fields = [c.nome, c.instagram, c.whatsapp, c.cidade, c.email];
+            const bestScore = Math.max(...fields.map(f => getSuggestionScore(normQuery, f)));
+            return {
+                score: bestScore,
+                label: c.nome || 'Cliente',
+                value: c.nome || '',
+                meta: `${c.cidade || 'Sem cidade'} • ${c.whatsapp || c.instagram || c.email || 'Sem contato'}`
+            };
+        }).filter(item => item.score > 0);
+
+        scored.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label, 'pt-BR'));
+        return scored.slice(0, 8);
+    }
+
+    function getSuggestionScore(normQuery, text) {
+        const t = normalizeText(text || '');
+        if (!normQuery || !t) return 0;
+        if (t === normQuery) return 100;
+        if (t.startsWith(normQuery)) return 80;
+        if (t.includes(' ' + normQuery)) return 65;
+        if (t.includes(normQuery)) return 50;
+
+        const qTokens = normQuery.split(' ').filter(Boolean);
+        if (qTokens.length > 1 && qTokens.every(tok => t.includes(tok))) return 40;
+        return 0;
+    }
+
+    function handleSearchSuggestionKeydown(type, e) {
+        const container = getSuggestionContainer(type, false);
+        if (!container || container.classList.contains('hidden')) return;
+        const buttons = Array.from(container.querySelectorAll('.search-suggestion-item'));
+        if (buttons.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeSuggestionType = type;
+            activeSuggestionIndex = Math.min(buttons.length - 1, activeSuggestionIndex + 1);
+            updateSuggestionSelection(type);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeSuggestionType = type;
+            activeSuggestionIndex = Math.max(0, activeSuggestionIndex - 1);
+            updateSuggestionSelection(type);
+        } else if (e.key === 'Enter') {
+            if (activeSuggestionIndex < 0 || activeSuggestionIndex >= buttons.length) return;
+            e.preventDefault();
+            buttons[activeSuggestionIndex].click();
+        } else if (e.key === 'Escape') {
+            hideSearchSuggestions(type);
+        }
+    }
+
+    function updateSuggestionSelection(type) {
+        const container = getSuggestionContainer(type, false);
+        if (!container) return;
+        const buttons = Array.from(container.querySelectorAll('.search-suggestion-item'));
+        buttons.forEach((btn, idx) => {
+            btn.classList.toggle('active', idx === activeSuggestionIndex && activeSuggestionType === type);
+        });
+    }
+
+    function selectSearchSuggestion(type, suggestion) {
+        const inputId = type === 'products' ? 'product-search' : 'client-search';
+        const inputEl = document.getElementById(inputId);
+        if (!inputEl || !suggestion) return;
+
+        inputEl.value = suggestion.value;
+        hideSearchSuggestions(type);
+
+        if (type === 'products') {
+            debounceProductSearch();
+        } else {
+            renderClients();
+        }
+        inputEl.focus();
+    }
+
+    function hideSearchSuggestions(type) {
+        const container = getSuggestionContainer(type, false);
+        if (!container) return;
+        container.classList.add('hidden');
+        if (activeSuggestionType === type) {
+            activeSuggestionType = null;
+            activeSuggestionIndex = -1;
+        }
+    }
+
+    function hideAllSearchSuggestions() {
+        hideSearchSuggestions('products');
+        hideSearchSuggestions('clients');
     }
 
     function closeMobileSidebar() {
@@ -412,6 +635,7 @@ const App = (() => {
                 <div class="category-footer">
                     <span class="text-muted">${count} produto(s)</span>
                     <div class="actions">
+                        <button class="btn btn-sm btn-icon" onclick="App.duplicateCategory(${cat.id})" title="Duplicar"><i data-lucide="copy"></i></button>
                         <button class="btn btn-sm btn-icon" onclick="App.openCategoryModal(${cat.id})" title="Editar"><i data-lucide="pencil"></i></button>
                         <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteCategory(${cat.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
                     </div>
@@ -516,6 +740,31 @@ const App = (() => {
         }
     }
 
+    async function duplicateCategory(id) {
+        const cat = await Categories.getById(id);
+        if (!cat) {
+            showToast('Categoria não encontrada.', 'warning');
+            return;
+        }
+
+        const categories = await Categories.getAll();
+        const duplicated = {
+            nome: getUniqueCopyName(cat.nome || 'Categoria', categories.map(c => c.nome)),
+            prefixo: getUniqueCategoryPrefix(cat.prefixo || 'CAT', categories.map(c => c.prefixo)),
+            cor: cat.cor,
+            descricao: cat.descricao || '',
+            icone: cat.icone || 'package'
+        };
+
+        try {
+            await Categories.save(duplicated);
+            showToast('Categoria duplicada com sucesso.', 'success');
+            await renderCategories();
+        } catch (err) {
+            showToast(err.message, 'danger');
+        }
+    }
+
     // ==========================================
     //  PRODUTOS — CRUD COMPLETO
     // ==========================================
@@ -580,6 +829,7 @@ const App = (() => {
                         <td class="${margemClass}">${margem.toFixed(1)}%</td>
                         <td>${statusBadge}</td>
                         <td class="actions">
+                            <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.duplicateProduct(${p.id})" title="Duplicar"><i data-lucide="copy"></i></button>
                             <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.openProductModal(${p.id})" title="Editar"><i data-lucide="pencil"></i></button>
                             <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.downloadProductZip(${p.id})" title="ZIP"><i data-lucide="archive"></i></button>
                             <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="event.stopPropagation(); App.deleteProduct(${p.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
@@ -621,7 +871,7 @@ const App = (() => {
 
     async function loadProductThumbnails(products) {
         for (const p of products) {
-            const url = await FileManager.getFirstImageUrl(p.id);
+            const url = await FileManager.getProductCoverUrl(p);
             if (url) {
                 document.querySelectorAll(`[data-product-id="${p.id}"]`).forEach(el => {
                     el.innerHTML = `<img src="${url}" alt="">`;
@@ -681,6 +931,7 @@ const App = (() => {
                     const isImage = f.tipo === 'image';
                     const icon = FileManager.getFileIcon(f.tipo);
                     const typeLabel = fileTypeLabel[f.tipo] || 'Arquivo';
+                    const isCover = Number(product.cover_file_id) === Number(f.id);
                     return `
                     <div class="file-item">
                         <div class="file-preview ${isImage ? 'file-preview-image' : ''}">
@@ -690,9 +941,10 @@ const App = (() => {
                         </div>
                         <div class="file-info">
                             <span class="file-name" title="${escapeHtml(f.nome_arquivo || '')}">${escapeHtml(f.nome_arquivo || 'Arquivo')}</span>
-                            <span class="file-size">${typeLabel} • ${FileManager.formatFileSize(f.tamanho_bytes || 0)}</span>
+                            <span class="file-size">${typeLabel} • ${FileManager.formatFileSize(f.tamanho_bytes || 0)} ${isCover ? '• Capa' : ''}</span>
                         </div>
                         <div class="file-actions">
+                            ${isImage ? `<button type="button" class="btn btn-sm ${isCover ? 'btn-primary' : 'btn-secondary'}" onclick="App.setProductCover(${product.id}, ${f.id})" title="${isCover ? 'Imagem de capa atual' : 'Definir como capa'}"><i data-lucide="star"></i> ${isCover ? 'Capa' : 'Definir capa'}</button>` : ''}
                             <button type="button" class="btn btn-sm btn-icon" onclick="FileManager.downloadFile(${f.id})" title="Baixar arquivo">
                                 <i data-lucide="download"></i>
                             </button>
@@ -786,6 +1038,7 @@ const App = (() => {
 
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Fechar</button>
+                <button type="button" class="btn btn-secondary" onclick="App.duplicateProduct(${product.id})"><i data-lucide="copy"></i> Duplicar Produto</button>
                 <button type="button" class="btn btn-secondary" onclick="App.downloadProductZip(${product.id})"><i data-lucide="archive"></i> Exportar ZIP</button>
                 <button type="button" class="btn btn-primary" onclick="App.openProductModal(${product.id})"><i data-lucide="pencil"></i> Editar Produto</button>
             </div>
@@ -1142,21 +1395,107 @@ const App = (() => {
         await renderProducts();
     }
 
+    async function duplicateProduct(id) {
+        const product = await Database.getById(Database.STORES.PRODUCTS, id);
+        if (!product) {
+            showToast('Produto não encontrado.', 'warning');
+            return;
+        }
+
+        const allProducts = await Database.getAll(Database.STORES.PRODUCTS);
+        const cloneName = getUniqueCopyName(product.nome || 'Produto', allProducts.map(p => p.nome));
+        const cloneSku = await getUniqueSkuCopy(product.codigo_sku || 'PROD');
+        const nowIso = new Date().toISOString();
+
+        const payload = {
+            ...product,
+            nome: cloneName,
+            codigo_sku: cloneSku,
+            cover_file_id: null,
+            created_at: nowIso,
+            updated_at: nowIso
+        };
+        delete payload.id;
+
+        const created = await Database.add(Database.STORES.PRODUCTS, payload);
+
+        const files = await Database.getProductFiles(id);
+        let newCoverFileId = null;
+        for (const file of files) {
+            const filePayload = {
+                ...file,
+                product_id: created.id,
+                created_at: nowIso
+            };
+            delete filePayload.id;
+            const createdFile = await Database.add(Database.STORES.PRODUCT_FILES, filePayload);
+            if (Number(product.cover_file_id) === Number(file.id)) {
+                newCoverFileId = createdFile.id;
+            }
+        }
+
+        if (newCoverFileId) {
+            await Database.update(Database.STORES.PRODUCTS, created.id, {
+                cover_file_id: newCoverFileId,
+                updated_at: nowIso
+            });
+        }
+
+        await Storage.refreshCache();
+        showToast('Produto duplicado com sucesso.', 'success');
+        await renderProducts();
+    }
+
     async function refreshProductFiles(productId) {
         const container = document.getElementById('file-gallery-container');
         if (!container) return;
+        const product = await Database.getById(Database.STORES.PRODUCTS, productId);
         const files = await FileManager.getProductFiles(productId);
-        container.innerHTML = FileManager.renderFileGallery(files, productId);
+        container.innerHTML = FileManager.renderFileGallery(files, productId, product?.cover_file_id || null);
         if (typeof lucide !== 'undefined') lucide.createIcons();
         await FileManager.loadThumbnails();
+    }
+
+    async function setProductCover(productId, fileId) {
+        const product = await Database.getById(Database.STORES.PRODUCTS, productId);
+        if (!product) {
+            showToast('Produto não encontrado.', 'warning');
+            return;
+        }
+
+        const file = await Database.getById(Database.STORES.PRODUCT_FILES, fileId);
+        if (!file || file.product_id !== productId || file.tipo !== 'image') {
+            showToast('Selecione uma imagem válida para capa.', 'warning');
+            return;
+        }
+
+        await Database.update(Database.STORES.PRODUCTS, productId, {
+            cover_file_id: fileId,
+            updated_at: new Date().toISOString()
+        });
+        await Storage.refreshCache();
+        showToast('Imagem de capa atualizada.', 'success');
+        await refreshProductFiles(productId);
+        await renderProducts();
     }
 
     async function removeProductFile(fileId, productId) {
         const ok = await confirmDialog('Excluir Arquivo', 'Tem certeza que deseja excluir este arquivo?');
         if (!ok) return;
+
+        const product = await Database.getById(Database.STORES.PRODUCTS, productId);
+        if (product && Number(product.cover_file_id) === Number(fileId)) {
+            await Database.update(Database.STORES.PRODUCTS, productId, {
+                cover_file_id: null,
+                updated_at: new Date().toISOString()
+            });
+        }
+
         await FileManager.deleteFile(fileId);
+        await Storage.refreshCache();
         showToast('Arquivo removido.', 'success');
         await refreshProductFiles(productId);
+        await renderProducts();
     }
 
     async function downloadProductZip(id) {
@@ -1311,7 +1650,7 @@ const App = (() => {
         if (!tbody) return;
 
         if (sales.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding:2.5rem;"><div class="empty-state"><div class="empty-icon"><i data-lucide="wallet"></i></div><p>Nenhuma venda encontrada.</p></div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted" style="padding:2.5rem;"><div class="empty-state"><div class="empty-icon"><i data-lucide="wallet"></i></div><p>Nenhuma venda encontrada.</p></div></td></tr>`;
             refreshLucideIcons();
             return;
         }
@@ -1366,6 +1705,9 @@ const App = (() => {
                 <td class="${lucroClass}">${fmtC(s.lucro)}</td>
                 <td>${cupom !== '—' ? `<code>${escapeHtml(cupom)}</code>` : '—'}</td>
                 <td>${escapeHtml(vendedor ? vendedor.nome : '—')}</td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.duplicateSale(${s.id})" title="Duplicar"><i data-lucide="copy"></i></button>
+                </td>
             </tr>`;
         }).join('');
 
@@ -1810,6 +2152,24 @@ const App = (() => {
         renderSales();
     }
 
+    function duplicateSale(id) {
+        const sale = Storage.getRowById('SALES', id);
+        if (!sale) {
+            showToast('Venda não encontrada.', 'warning');
+            return;
+        }
+
+        const duplicated = {
+            ...sale,
+            data_venda: new Date().toISOString()
+        };
+        delete duplicated.id;
+
+        Storage.addRow('SALES', duplicated);
+        showToast('Venda duplicada com sucesso.', 'success');
+        renderSales();
+    }
+
     // ==========================================
     //  GASTOS — CRUD
     // ==========================================
@@ -1870,6 +2230,7 @@ const App = (() => {
                 <td>${fmtC(e.valor_unitario || 0)}</td>
                 <td><strong>${fmtC(e.valor_total || 0)}</strong></td>
                 <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.duplicateExpense(${e.id})" title="Duplicar"><i data-lucide="copy"></i></button>
                     <button class="btn btn-sm btn-icon" onclick="App.openExpenseModal(${e.id})" title="Editar"><i data-lucide="pencil"></i></button>
                     <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteExpense(${e.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
                 </td>
@@ -2020,6 +2381,27 @@ const App = (() => {
         renderExpenses();
     }
 
+    function duplicateExpense(id) {
+        const expense = Storage.getRowById('EXPENSES', id);
+        if (!expense) {
+            showToast('Gasto não encontrado.', 'warning');
+            return;
+        }
+
+        const nowIso = new Date().toISOString();
+        const duplicated = {
+            ...expense,
+            data_gasto: nowIso,
+            created_at: nowIso,
+            updated_at: nowIso
+        };
+        delete duplicated.id;
+
+        Storage.addRow('EXPENSES', duplicated);
+        showToast('Gasto duplicado com sucesso.', 'success');
+        renderExpenses();
+    }
+
     // ==========================================
     //  CLIENTES — CRUD
     // ==========================================
@@ -2125,6 +2507,7 @@ const App = (() => {
                 <td class="${stats.totalDevido > 0 ? 'text-danger' : 'text-success'}">${fmtC(stats.totalDevido)}</td>
                 <td>${escapeHtml(paymentLabel)}</td>
                 <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.duplicateClient(${c.id})" title="Duplicar"><i data-lucide="copy"></i></button>
                     <button class="btn btn-sm btn-icon" onclick="App.openClientModal(${c.id})" title="Editar"><i data-lucide="pencil"></i></button>
                     <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteClient(${c.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
                 </td>
@@ -2231,6 +2614,28 @@ const App = (() => {
 
         Storage.deleteRow('CLIENTS', id);
         showToast('Cliente excluído.', 'success');
+        renderClients();
+    }
+
+    function duplicateClient(id) {
+        const client = Storage.getRowById('CLIENTS', id);
+        if (!client) {
+            showToast('Cliente não encontrado.', 'warning');
+            return;
+        }
+
+        const allClients = Storage.getSheet('CLIENTS');
+        const nowIso = new Date().toISOString();
+        const duplicated = {
+            ...client,
+            nome: getUniqueCopyName(client.nome || 'Cliente', allClients.map(c => c.nome)),
+            created_at: nowIso,
+            updated_at: nowIso
+        };
+        delete duplicated.id;
+
+        Storage.addRow('CLIENTS', duplicated);
+        showToast('Cliente duplicado com sucesso.', 'success');
         renderClients();
     }
 
@@ -2358,6 +2763,7 @@ const App = (() => {
                 <td>${periodo}</td>
                 <td>${statusBadge}</td>
                 <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.duplicatePromotion(${p.id})" title="Duplicar"><i data-lucide="copy"></i></button>
                     <button class="btn btn-sm btn-icon" onclick="App.togglePromotion(${p.id})" title="${p.ativo ? 'Desativar' : 'Ativar'}"><i data-lucide="${p.ativo ? 'pause' : 'play'}"></i></button>
                     <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deletePromotion(${p.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
                 </td>
@@ -2450,6 +2856,25 @@ const App = (() => {
         await renderPromotionsList();
     }
 
+    async function duplicatePromotion(id) {
+        const promo = await Promotions.getPromotionById(id);
+        if (!promo) {
+            showToast('Promoção não encontrada.', 'warning');
+            return;
+        }
+
+        const duplicated = {
+            ...promo,
+            ativo: false,
+            created_at: new Date().toISOString()
+        };
+        delete duplicated.id;
+
+        await Database.add(Database.STORES.PROMOTIONS, duplicated);
+        showToast('Promoção duplicada (inativa) com sucesso.', 'success');
+        await renderPromotionsList();
+    }
+
     // --- CUPONS ---
 
     async function renderCouponsList() {
@@ -2480,6 +2905,7 @@ const App = (() => {
                 <td>${usos}</td>
                 <td>${statusBadge}</td>
                 <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.duplicateCoupon(${c.id})" title="Duplicar"><i data-lucide="copy"></i></button>
                     <button class="btn btn-sm btn-icon" onclick="App.toggleCoupon(${c.id})" title="${c.ativo ? 'Desativar' : 'Ativar'}"><i data-lucide="${c.ativo ? 'pause' : 'play'}"></i></button>
                     <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteCoupon(${c.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
                 </td>
@@ -2577,6 +3003,35 @@ const App = (() => {
         if (!ok) return;
         await Promotions.deleteCoupon(id);
         showToast('Cupom excluído.', 'success');
+        await renderCouponsList();
+    }
+
+    async function duplicateCoupon(id) {
+        const coupon = await Promotions.getCouponById(id);
+        if (!coupon) {
+            showToast('Cupom não encontrado.', 'warning');
+            return;
+        }
+
+        let code = Promotions.generateCouponCode();
+        let guard = 0;
+        while (await Promotions.getCouponByCode(code)) {
+            code = Promotions.generateCouponCode();
+            guard += 1;
+            if (guard > 20) break;
+        }
+
+        const duplicated = {
+            ...coupon,
+            codigo: code,
+            usos_realizados: 0,
+            ativo: false,
+            created_at: new Date().toISOString()
+        };
+        delete duplicated.id;
+
+        await Database.add(Database.STORES.COUPONS, duplicated);
+        showToast('Cupom duplicado com sucesso.', 'success');
         await renderCouponsList();
     }
 
@@ -2802,6 +3257,7 @@ const App = (() => {
                 <td>${escapeHtml(u.email)}</td>
                 <td><span class="badge badge-${badgeType}">${u.tipo}</span></td>
                 <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.duplicateUser(${u.id})" title="Duplicar"><i data-lucide="copy"></i></button>
                     <button class="btn btn-sm btn-icon" onclick="App.openUserModal(${u.id})" title="Editar"><i data-lucide="pencil"></i></button>
                     <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteUser(${u.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
                 </td>
@@ -2893,6 +3349,26 @@ const App = (() => {
 
         Storage.deleteRow('USERS', id);
         showToast('Usuário excluído.', 'success');
+        renderUsers();
+    }
+
+    function duplicateUser(id) {
+        const user = Storage.getRowById('USERS', id);
+        if (!user) {
+            showToast('Usuário não encontrado.', 'warning');
+            return;
+        }
+
+        const users = Storage.getSheet('USERS');
+        const duplicated = {
+            nome: getUniqueCopyName(user.nome || 'Usuário', users.map(u => u.nome)),
+            email: getUniqueCopyEmail(user.email || 'usuario@exemplo.com', users.map(u => u.email || '')),
+            senha_hash: user.senha_hash,
+            tipo: user.tipo || 'VENDEDOR'
+        };
+
+        Storage.addRow('USERS', duplicated);
+        showToast('Usuário duplicado com sucesso.', 'success');
         renderUsers();
     }
 
@@ -3114,6 +3590,68 @@ const App = (() => {
         return Calculator.formatCurrency(val);
     }
 
+    function getUniqueCopyName(baseName, existingNames) {
+        const base = String(baseName || 'Item').trim();
+        const names = new Set((existingNames || []).map(n => String(n || '').trim().toLowerCase()));
+        let candidate = `${base} (Cópia)`;
+        let index = 2;
+        while (names.has(candidate.toLowerCase())) {
+            candidate = `${base} (Cópia ${index})`;
+            index += 1;
+        }
+        return candidate;
+    }
+
+    function getUniqueCategoryPrefix(basePrefix, existingPrefixes) {
+        const prefixes = new Set((existingPrefixes || []).map(p => String(p || '').toUpperCase()));
+        const cleanBase = String(basePrefix || 'CAT').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'CAT';
+
+        for (let index = 1; index < 1000; index++) {
+            const suffix = String(index);
+            const maxBaseLen = Math.max(1, 5 - suffix.length);
+            let candidate = (cleanBase.slice(0, maxBaseLen) + suffix).slice(0, 5);
+            if (candidate.length < 2) {
+                candidate = (cleanBase.slice(0, 1) + suffix).slice(0, 5);
+            }
+            if (candidate.length >= 2 && !prefixes.has(candidate)) {
+                return candidate;
+            }
+        }
+
+        return (cleanBase.slice(0, 4) + '9').slice(0, 5);
+    }
+
+    async function getUniqueSkuCopy(baseSku) {
+        const root = String(baseSku || 'PROD').trim().toUpperCase().replace(/\s+/g, '-');
+        let candidate = `${root}-CP`;
+        let index = 1;
+        while (!(await Database.isSkuUnique(candidate))) {
+            candidate = `${root}-CP${index}`;
+            index += 1;
+            if (index > 9999) {
+                candidate = `${root}-${Date.now()}`;
+                break;
+            }
+        }
+        return candidate;
+    }
+
+    function getUniqueCopyEmail(baseEmail, existingEmails) {
+        const email = String(baseEmail || 'usuario@exemplo.com').trim().toLowerCase();
+        const all = new Set((existingEmails || []).map(e => String(e || '').trim().toLowerCase()));
+        const parts = email.split('@');
+        const local = parts[0] || 'usuario';
+        const domain = parts[1] || 'exemplo.com';
+
+        let candidate = `${local}+copia@${domain}`;
+        let index = 2;
+        while (all.has(candidate)) {
+            candidate = `${local}+copia${index}@${domain}`;
+            index += 1;
+        }
+        return candidate;
+    }
+
     function refreshLucideIcons() {
         if (typeof lucide !== 'undefined') {
             lucide.createIcons();
@@ -3126,28 +3664,28 @@ const App = (() => {
     return {
         init, navigate, closeModal, showToast,
         // Categories
-        openCategoryModal, saveCategory, deleteCategory,
+        openCategoryModal, saveCategory, deleteCategory, duplicateCategory,
         _selectIcon, _selectColor,
         // Products
-        openProductSummary, openProductModal, saveProduct, deleteProduct,
+        openProductSummary, openProductModal, saveProduct, deleteProduct, duplicateProduct,
         calcProductPreview, switchProductTab, onCategoryChange,
         toggleProductView, debounceProductSearch, filterProducts,
-        refreshProductFiles, removeProductFile, downloadProductZip,
+        refreshProductFiles, removeProductFile, downloadProductZip, setProductCover,
         // Sales
-        openSaleModal, toggleSaleMode, onSaleProductChange, onSaleClientInput, calcSalePreview, applySaleCoupon, saveSale, filterSales,
+        openSaleModal, toggleSaleMode, onSaleProductChange, onSaleClientInput, calcSalePreview, applySaleCoupon, saveSale, filterSales, duplicateSale,
         // Expenses
-        renderExpenses, openExpenseModal, calcExpenseTotal, saveExpense, deleteExpense,
+        renderExpenses, openExpenseModal, calcExpenseTotal, saveExpense, deleteExpense, duplicateExpense,
         // Clients
-        renderClients, openClientModal, saveClient, deleteClient,
+        renderClients, openClientModal, saveClient, deleteClient, duplicateClient,
         // Trash
         renderTrash, restoreTrashItem, permanentDeleteTrashItem, purgeExpiredTrashNow,
         // Promotions
-        switchPromoTab, openPromotionModal, savePromotion, togglePromotion, deletePromotion,
-        openCouponModal, saveCoupon, toggleCoupon, deleteCoupon,
+        switchPromoTab, openPromotionModal, savePromotion, togglePromotion, deletePromotion, duplicatePromotion,
+        openCouponModal, saveCoupon, toggleCoupon, deleteCoupon, duplicateCoupon,
         // Calculator
         calcAdvanced, calcResetForm, calcSaveAsProduct, calcRegisterSaleFromCalculator,
         // Settings & Users
-        saveSettings, openUserModal, saveUser, deleteUser,
+        saveSettings, openUserModal, saveUser, deleteUser, duplicateUser,
         connectRootStorage, syncRootStorageNow, restoreRootStorage, getCurrentUIState,
         chooseExistingRootFolder, createNewRootFolder, accessRootStorage
     };
