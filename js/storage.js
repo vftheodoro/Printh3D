@@ -21,7 +21,8 @@ const Storage = (() => {
             }],
             PRODUCTS: [],
             SALES: [],
-            CLIENTS: []
+            CLIENTS: [],
+            EXPENSES: []
         };
     }
 
@@ -38,12 +39,14 @@ const Storage = (() => {
         const products = await Database.getAll(Database.STORES.PRODUCTS);
         const sales = await Database.getAll(Database.STORES.SALES);
         const clients = await Database.getAll(Database.STORES.CLIENTS);
+        const expenses = await Database.getAll(Database.STORES.EXPENSES);
         cache = {
             USERS: users,
             SETTINGS: settingsArr.length > 0 ? [settingsArr[0]] : getDefaultData().SETTINGS,
             PRODUCTS: products,
             SALES: sales,
-            CLIENTS: clients
+            CLIENTS: clients,
+            EXPENSES: expenses
         };
     }
 
@@ -65,7 +68,8 @@ const Storage = (() => {
         const storeMap = {
             'USERS': Database.STORES.USERS, 'SETTINGS': Database.STORES.SETTINGS,
             'PRODUCTS': Database.STORES.PRODUCTS, 'SALES': Database.STORES.SALES,
-            'CLIENTS': Database.STORES.CLIENTS
+            'CLIENTS': Database.STORES.CLIENTS,
+            'EXPENSES': Database.STORES.EXPENSES
         };
         const storeName = storeMap[name];
         if (storeName) {
@@ -111,7 +115,8 @@ const Storage = (() => {
             'SETTINGS': Database.STORES.SETTINGS,
             'PRODUCTS': Database.STORES.PRODUCTS,
             'SALES': Database.STORES.SALES,
-            'CLIENTS': Database.STORES.CLIENTS
+            'CLIENTS': Database.STORES.CLIENTS,
+            'EXPENSES': Database.STORES.EXPENSES
         };
         const sourceStore = storeMap[sheetName];
         if (sourceStore && row) {
@@ -133,7 +138,7 @@ const Storage = (() => {
                 try {
                     const workbook = XLSX.read(e.target.result, { type: 'array' });
                     const data = {};
-                    const expectedSheets = ['USERS', 'SETTINGS', 'PRODUCTS', 'SALES', 'CLIENTS'];
+                    const expectedSheets = ['USERS', 'SETTINGS', 'PRODUCTS', 'SALES', 'CLIENTS', 'EXPENSES'];
                     expectedSheets.forEach(name => {
                         if (workbook.SheetNames.includes(name))
                             data[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name]);
@@ -159,7 +164,7 @@ const Storage = (() => {
         try {
             const data = getData();
             const workbook = XLSX.utils.book_new();
-            ['USERS', 'SETTINGS', 'PRODUCTS', 'SALES', 'CLIENTS'].forEach(name => {
+            ['USERS', 'SETTINGS', 'PRODUCTS', 'SALES', 'CLIENTS', 'EXPENSES'].forEach(name => {
                 const sheet = XLSX.utils.json_to_sheet(data[name] || []);
                 XLSX.utils.book_append_sheet(workbook, sheet, name);
             });

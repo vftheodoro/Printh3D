@@ -25,10 +25,15 @@ const Dashboard = (() => {
     // ------------------------------------------
     async function renderKPIs() {
         const sales = getMonthSales();
+        const expenses = getMonthExpenses();
         const allProducts = Storage.getSheet('PRODUCTS');
+        const allSales = Storage.getSheet('SALES');
 
         const totalVendido = sales.reduce((sum, s) => sum + (parseFloat(s.valor_venda) || 0), 0);
         const totalLucro = sales.reduce((sum, s) => sum + (parseFloat(s.lucro) || 0), 0);
+        const totalGastos = expenses.reduce((sum, e) => sum + (parseFloat(e.valor_total) || 0), 0);
+        const resultadoLiquido = totalLucro - totalGastos;
+        const totalAReceber = allSales.reduce((sum, s) => sum + (Math.max(0, parseFloat(s.valor_devido) || 0)), 0);
         const margemMedia = sales.length > 0
             ? sales.reduce((sum, s) => {
                 const venda = parseFloat(s.valor_venda) || 0;
@@ -60,6 +65,9 @@ const Dashboard = (() => {
         setKPI('kpi-count', sales.length);
         setKPI('kpi-promos', promosCount);
         setKPI('kpi-low-stock', lowStock);
+        setKPI('kpi-expenses', Calculator.formatCurrency(totalGastos));
+        setKPI('kpi-net', Calculator.formatCurrency(resultadoLiquido));
+        setKPI('kpi-receivable', Calculator.formatCurrency(totalAReceber));
     }
 
     // ------------------------------------------
@@ -274,6 +282,17 @@ const Dashboard = (() => {
         const allSales = Storage.getSheet('SALES');
         return allSales.filter(s => {
             const d = new Date(s.data_venda);
+            return !isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+    }
+
+    function getMonthExpenses() {
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const allExpenses = Storage.getSheet('EXPENSES');
+        return allExpenses.filter(e => {
+            const d = new Date(e.data_gasto);
             return !isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
     }

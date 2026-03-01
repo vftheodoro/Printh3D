@@ -214,7 +214,7 @@ const App = (() => {
 
         const titles = {
             dashboard: 'Dashboard', categories: 'Categorias',
-            products: 'Produtos', sales: 'Vendas', clients: 'Clientes',
+            products: 'Produtos', sales: 'Vendas', expenses: 'Gastos', clients: 'Clientes',
             promotions: 'Promoções e Cupons',
             calculator: 'Calculadora de Custo',
             settings: 'Configurações', users: 'Usuários', trash: 'Lixeira'
@@ -226,6 +226,7 @@ const App = (() => {
             case 'categories': await renderCategories(); break;
             case 'products':   await renderProducts(); break;
             case 'sales':      renderSales(); break;
+            case 'expenses':   renderExpenses(); break;
             case 'clients':    renderClients(); break;
             case 'promotions': await renderPromotions(); break;
             case 'calculator': await renderCalculator(); break;
@@ -1690,6 +1691,216 @@ const App = (() => {
     }
 
     // ==========================================
+    //  GASTOS — CRUD
+    // ==========================================
+
+    function renderExpenses() {
+        const tbody = document.getElementById('expenses-body');
+        if (!tbody) return;
+
+        const start = document.getElementById('expense-filter-start')?.value;
+        const end = document.getElementById('expense-filter-end')?.value;
+        const category = document.getElementById('expense-filter-category')?.value || '';
+        const payment = document.getElementById('expense-filter-payment')?.value || '';
+
+        let expenses = Storage.getSheet('EXPENSES').slice();
+
+        if (start) expenses = expenses.filter(e => String(e.data_gasto || '').slice(0, 10) >= start);
+        if (end) expenses = expenses.filter(e => String(e.data_gasto || '').slice(0, 10) <= end);
+        if (category) expenses = expenses.filter(e => e.categoria === category);
+        if (payment) expenses = expenses.filter(e => e.tipo_pagamento === payment);
+
+        expenses.sort((a, b) => new Date(b.data_gasto) - new Date(a.data_gasto));
+
+        const allCategories = Array.from(new Set(Storage.getSheet('EXPENSES').map(e => e.categoria).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        const catSel = document.getElementById('expense-filter-category');
+        if (catSel) {
+            const cur = catSel.value;
+            catSel.innerHTML = '<option value="">Todas</option>' + allCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+            if (allCategories.includes(cur)) catSel.value = cur;
+        }
+
+        const total = expenses.reduce((sum, e) => sum + (parseFloat(e.valor_total) || 0), 0);
+        const summary = document.getElementById('expenses-summary');
+        if (summary) {
+            summary.innerHTML = `<span>Total de Gastos: <strong>${fmtC(total)}</strong></span><span>Registros: <strong>${expenses.length}</strong></span>`;
+        }
+
+        if (expenses.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding:2rem;">Nenhum gasto encontrado.</td></tr>`;
+            refreshLucideIcons();
+            return;
+        }
+
+        const paymentLabel = {
+            pix: 'PIX', dinheiro: 'Dinheiro', cartao: 'Cartão', boleto: 'Boleto', transferencia: 'Transferência', outro: 'Outro'
+        };
+
+        tbody.innerHTML = expenses.map(e => `
+            <tr>
+                <td>${Dashboard.formatDate(e.data_gasto)}</td>
+                <td>
+                    <strong>${escapeHtml(e.descricao || '—')}</strong>
+                    ${e.observacoes ? `<div class="text-muted" style="font-size:0.76rem;">${escapeHtml(e.observacoes)}</div>` : ''}
+                </td>
+                <td><span class="badge badge-secondary">${escapeHtml(e.categoria || 'Geral')}</span></td>
+                <td>${escapeHtml(e.fornecedor || '—')}</td>
+                <td><span class="badge badge-info">${paymentLabel[e.tipo_pagamento] || 'Outro'}</span></td>
+                <td>${parseFloat(e.quantidade) || 1}</td>
+                <td>${fmtC(e.valor_unitario || 0)}</td>
+                <td><strong>${fmtC(e.valor_total || 0)}</strong></td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.openExpenseModal(${e.id})" title="Editar"><i data-lucide="pencil"></i></button>
+                    <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteExpense(${e.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
+                </td>
+            </tr>
+        `).join('');
+
+        refreshLucideIcons();
+    }
+
+    function calcExpenseTotal() {
+        const qty = Math.max(0, parseFloat(document.getElementById('expense-qty')?.value) || 0);
+        const unit = Math.max(0, parseFloat(document.getElementById('expense-unit')?.value) || 0);
+        const total = Calculator.round2(qty * unit);
+        const totalInput = document.getElementById('expense-total');
+        if (totalInput) totalInput.value = String(total);
+    }
+
+    function openExpenseModal(id) {
+        const expense = id ? Storage.getRowById('EXPENSES', id) : null;
+        const title = expense ? 'Editar Gasto' : 'Novo Gasto';
+
+        const categories = ['Filamento', 'Argolas', 'Tintas', 'Peças', 'Transporte', 'Embalagens', 'Ferramentas', 'Manutenção', 'Energia', 'Marketing', 'Outros'];
+        const catOptions = categories.map(c => `<option value="${c}" ${(expense?.categoria || '') === c ? 'selected' : ''}>${c}</option>`).join('');
+
+        const now = new Date();
+        const defaultDate = now.toISOString().slice(0, 16);
+
+        const html = `
+        <form id="expense-form" onsubmit="event.preventDefault(); App.saveExpense(${id || ''});">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Descrição</label>
+                    <input type="text" id="expense-desc" value="${escapeHtml(expense?.descricao || '')}" required placeholder="Ex: Compra de 3kg PLA azul">
+                </div>
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select id="expense-category" required>
+                        <option value="">Selecione...</option>
+                        ${catOptions}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Fornecedor / Origem</label>
+                    <input type="text" id="expense-supplier" value="${escapeHtml(expense?.fornecedor || '')}" placeholder="Loja, marketplace, transportadora...">
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Quantidade</label>
+                    <input type="number" id="expense-qty" value="${expense?.quantidade ?? 1}" min="0" step="0.01" oninput="App.calcExpenseTotal()">
+                </div>
+                <div class="form-group">
+                    <label>Valor Unitário (R$)</label>
+                    <input type="number" id="expense-unit" value="${expense?.valor_unitario ?? 0}" min="0" step="0.01" oninput="App.calcExpenseTotal()">
+                </div>
+                <div class="form-group">
+                    <label>Total (R$)</label>
+                    <input type="number" id="expense-total" value="${expense?.valor_total ?? 0}" min="0" step="0.01" readonly>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Tipo de Pagamento</label>
+                    <select id="expense-payment" required>
+                        <option value="pix" ${expense?.tipo_pagamento === 'pix' ? 'selected' : ''}>PIX</option>
+                        <option value="dinheiro" ${expense?.tipo_pagamento === 'dinheiro' ? 'selected' : ''}>Dinheiro</option>
+                        <option value="cartao" ${expense?.tipo_pagamento === 'cartao' ? 'selected' : ''}>Cartão</option>
+                        <option value="boleto" ${expense?.tipo_pagamento === 'boleto' ? 'selected' : ''}>Boleto</option>
+                        <option value="transferencia" ${expense?.tipo_pagamento === 'transferencia' ? 'selected' : ''}>Transferência</option>
+                        <option value="outro" ${!expense || expense?.tipo_pagamento === 'outro' ? 'selected' : ''}>Outro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Data do Gasto</label>
+                    <input type="datetime-local" id="expense-date" value="${expense?.data_gasto ? String(expense.data_gasto).slice(0, 16) : defaultDate}" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Observações</label>
+                <textarea id="expense-notes" rows="3" placeholder="Detalhes do gasto (marca, lote, frete, etc.)">${escapeHtml(expense?.observacoes || '')}</textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> ${expense ? 'Atualizar' : 'Salvar Gasto'}</button>
+            </div>
+        </form>`;
+
+        openModal(title, html);
+        calcExpenseTotal();
+    }
+
+    function saveExpense(id) {
+        const descricao = document.getElementById('expense-desc')?.value.trim();
+        const categoria = document.getElementById('expense-category')?.value;
+        const fornecedor = document.getElementById('expense-supplier')?.value.trim() || '';
+        const quantidade = Math.max(0, parseFloat(document.getElementById('expense-qty')?.value) || 0);
+        const valorUnitario = Math.max(0, parseFloat(document.getElementById('expense-unit')?.value) || 0);
+        const valorTotal = Calculator.round2(Math.max(0, parseFloat(document.getElementById('expense-total')?.value) || 0));
+        const tipoPagamento = document.getElementById('expense-payment')?.value || 'outro';
+        const dataGasto = document.getElementById('expense-date')?.value;
+        const observacoes = document.getElementById('expense-notes')?.value.trim() || '';
+
+        if (!descricao || !categoria) {
+            showToast('Preencha descrição e categoria.', 'warning');
+            return;
+        }
+
+        const data = {
+            descricao,
+            categoria,
+            fornecedor,
+            quantidade,
+            valor_unitario: valorUnitario,
+            valor_total: valorTotal,
+            tipo_pagamento: tipoPagamento,
+            data_gasto: dataGasto || new Date().toISOString(),
+            observacoes,
+            updated_at: new Date().toISOString()
+        };
+
+        if (id) {
+            Storage.updateRow('EXPENSES', parseInt(id), data);
+            showToast('Gasto atualizado!', 'success');
+        } else {
+            Storage.addRow('EXPENSES', {
+                ...data,
+                created_at: new Date().toISOString()
+            });
+            showToast('Gasto registrado!', 'success');
+        }
+
+        closeModal();
+        renderExpenses();
+        if (currentSection === 'dashboard') Dashboard.render();
+    }
+
+    async function deleteExpense(id) {
+        const expense = Storage.getRowById('EXPENSES', id);
+        if (!expense) return;
+        const ok = await confirmDialog('Excluir Gasto', `Excluir gasto "${expense.descricao}"?`);
+        if (!ok) return;
+        Storage.deleteRow('EXPENSES', id);
+        showToast('Gasto enviado para a lixeira.', 'success');
+        renderExpenses();
+    }
+
+    // ==========================================
     //  CLIENTES — CRUD
     // ==========================================
 
@@ -1917,7 +2128,8 @@ const App = (() => {
             promotions: 'Promoções',
             coupons: 'Cupons',
             sales: 'Vendas',
-            clients: 'Clientes'
+            clients: 'Clientes',
+            expenses: 'Gastos'
         };
         return map[store] || store;
     }
@@ -2635,6 +2847,8 @@ const App = (() => {
         refreshProductFiles, removeProductFile, downloadProductZip,
         // Sales
         openSaleModal, toggleSaleMode, onSaleProductChange, onSaleClientInput, calcSalePreview, applySaleCoupon, saveSale, filterSales,
+        // Expenses
+        renderExpenses, openExpenseModal, calcExpenseTotal, saveExpense, deleteExpense,
         // Clients
         renderClients, openClientModal, saveClient, deleteClient,
         // Trash

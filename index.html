@@ -61,6 +61,11 @@
                     </a>
                 </li>
                 <li>
+                    <a href="#" data-section="expenses">
+                        <i data-lucide="receipt"></i> Gastos
+                    </a>
+                </li>
+                <li>
                     <a href="#" data-section="clients">
                         <i data-lucide="contact"></i> Clientes
                     </a>
@@ -193,6 +198,27 @@
                             <div class="kpi-info">
                                 <span class="kpi-label">Estoque Baixo</span>
                                 <span class="kpi-value" id="kpi-low-stock">0</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="receipt-text"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Gastos do Mês</span>
+                                <span class="kpi-value" id="kpi-expenses">R$ 0,00</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="coins"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Resultado Líquido</span>
+                                <span class="kpi-value" id="kpi-net">R$ 0,00</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="hand-coins"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">A Receber</span>
+                                <span class="kpi-value" id="kpi-receivable">R$ 0,00</span>
                             </div>
                         </div>
                     </div>
@@ -377,6 +403,71 @@
                                 </tr>
                             </thead>
                             <tbody id="sales-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ===================================
+                     GASTOS
+                     =================================== -->
+                <div id="section-expenses" class="section">
+                    <div class="section-header">
+                        <h1><i data-lucide="receipt"></i> Gastos</h1>
+                        <button class="btn btn-primary" onclick="App.openExpenseModal()">
+                            <i data-lucide="plus"></i> Novo Gasto
+                        </button>
+                    </div>
+
+                    <div class="filters-bar">
+                        <div class="filter-group">
+                            <label>Data Início</label>
+                            <input type="date" id="expense-filter-start" onchange="App.renderExpenses()">
+                        </div>
+                        <div class="filter-group">
+                            <label>Data Fim</label>
+                            <input type="date" id="expense-filter-end" onchange="App.renderExpenses()">
+                        </div>
+                        <div class="filter-group">
+                            <label>Categoria</label>
+                            <select id="expense-filter-category" onchange="App.renderExpenses()">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Pagamento</label>
+                            <select id="expense-filter-payment" onchange="App.renderExpenses()">
+                                <option value="">Todos</option>
+                                <option value="pix">PIX</option>
+                                <option value="dinheiro">Dinheiro</option>
+                                <option value="cartao">Cartão</option>
+                                <option value="boleto">Boleto</option>
+                                <option value="transferencia">Transferência</option>
+                                <option value="outro">Outro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="sales-summary" id="expenses-summary">
+                        <span>Total de Gastos: <strong>R$ 0,00</strong></span>
+                        <span>Registros: <strong>0</strong></span>
+                    </div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Descrição</th>
+                                    <th>Categoria</th>
+                                    <th>Fornecedor</th>
+                                    <th>Pagamento</th>
+                                    <th>Qtd</th>
+                                    <th>Unitário</th>
+                                    <th>Total</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expenses-body"></tbody>
                         </table>
                     </div>
                 </div>

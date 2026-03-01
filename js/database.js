@@ -5,7 +5,7 @@
 
 const Database = (() => {
     const DB_NAME = 'printh3d_pro';
-    const DB_VERSION = 3;
+    const DB_VERSION = 4;
     let db = null;
 
     const STORES = {
@@ -18,6 +18,7 @@ const Database = (() => {
         COUPONS: 'coupons',
         SALES: 'sales',
         CLIENTS: 'clients',
+        EXPENSES: 'expenses',
         TRASH: 'trash'
     };
 
@@ -95,6 +96,14 @@ const Database = (() => {
                     store.createIndex('cidade', 'cidade', { unique: false });
                     store.createIndex('whatsapp', 'whatsapp', { unique: false });
                     store.createIndex('instagram', 'instagram', { unique: false });
+                }
+
+                // Expenses
+                if (!database.objectStoreNames.contains(STORES.EXPENSES)) {
+                    const store = database.createObjectStore(STORES.EXPENSES, { keyPath: 'id', autoIncrement: true });
+                    store.createIndex('categoria', 'categoria', { unique: false });
+                    store.createIndex('tipo_pagamento', 'tipo_pagamento', { unique: false });
+                    store.createIndex('data_gasto', 'data_gasto', { unique: false });
                 }
 
                 // Trash (soft-deleted items with retention)
@@ -659,7 +668,7 @@ const Database = (() => {
 
         // Export all stores as JSON (except files which are binary)
         const storeNames = [STORES.USERS, STORES.SETTINGS, STORES.CATEGORIES,
-                   STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES, STORES.CLIENTS, STORES.TRASH];
+                   STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES, STORES.CLIENTS, STORES.EXPENSES, STORES.TRASH];
 
         for (const name of storeNames) {
             const data = await getAll(name);
@@ -692,7 +701,7 @@ const Database = (() => {
         const zip = await JSZip.loadAsync(file);
 
         const storeNames = [STORES.USERS, STORES.SETTINGS, STORES.CATEGORIES,
-                   STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES, STORES.CLIENTS, STORES.TRASH];
+                   STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES, STORES.CLIENTS, STORES.EXPENSES, STORES.TRASH];
 
         // Clear all stores
         for (const name of storeNames) {
@@ -736,8 +745,8 @@ const Database = (() => {
     // ------------------------------------------
     async function exportExcel() {
         const workbook = XLSX.utils.book_new();
-        const storeNames = ['users', 'settings', 'categories', 'products', 'promotions', 'coupons', 'sales', 'clients', 'trash'];
-        const sheetLabels = ['USERS', 'SETTINGS', 'CATEGORIES', 'PRODUCTS', 'PROMOTIONS', 'COUPONS', 'SALES', 'CLIENTS', 'TRASH'];
+        const storeNames = ['users', 'settings', 'categories', 'products', 'promotions', 'coupons', 'sales', 'clients', 'expenses', 'trash'];
+        const sheetLabels = ['USERS', 'SETTINGS', 'CATEGORIES', 'PRODUCTS', 'PROMOTIONS', 'COUPONS', 'SALES', 'CLIENTS', 'EXPENSES', 'TRASH'];
 
         for (let i = 0; i < storeNames.length; i++) {
             const data = await getAll(storeNames[i]);
