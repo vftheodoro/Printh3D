@@ -60,6 +60,11 @@
                         <i data-lucide="wallet"></i> Vendas
                     </a>
                 </li>
+                <li>
+                    <a href="#" data-section="clients">
+                        <i data-lucide="contact"></i> Clientes
+                    </a>
+                </li>
                 <li class="admin-only">
                     <a href="#" data-section="promotions">
                         <i data-lucide="percent"></i> Promoções
@@ -81,6 +86,11 @@
                 <li class="admin-only">
                     <a href="#" data-section="users">
                         <i data-lucide="users"></i> Usuários
+                    </a>
+                </li>
+                <li class="admin-only">
+                    <a href="#" data-section="trash">
+                        <i data-lucide="trash"></i> Lixeira
                     </a>
                 </li>
 
@@ -355,7 +365,11 @@
                                     <th>Data</th>
                                     <th>Produto</th>
                                     <th>Cliente</th>
+                                    <th>Canal</th>
+                                    <th>Cidade</th>
+                                    <th>Pagamento</th>
                                     <th>Valor</th>
+                                    <th>Devido</th>
                                     <th>Desconto</th>
                                     <th>Lucro</th>
                                     <th>Cupom</th>
@@ -363,6 +377,111 @@
                                 </tr>
                             </thead>
                             <tbody id="sales-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ===================================
+                     CLIENTES
+                     =================================== -->
+                <div id="section-clients" class="section">
+                    <div class="section-header">
+                        <h1><i data-lucide="contact"></i> Clientes</h1>
+                        <button class="btn btn-primary" onclick="App.openClientModal()">
+                            <i data-lucide="user-plus"></i> Novo Cliente
+                        </button>
+                    </div>
+
+                    <div class="products-toolbar">
+                        <div class="search-box">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="client-search" placeholder="Buscar por nome, cidade, Instagram ou WhatsApp..." oninput="App.renderClients()">
+                        </div>
+                        <div class="filter-group">
+                            <label>Ranking</label>
+                            <select id="client-filter-ranking" onchange="App.renderClients()">
+                                <option value="">Padrão</option>
+                                <option value="mais-compram">Os que mais compram</option>
+                                <option value="menos-compram">Os que menos compram</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Situação</label>
+                            <select id="client-filter-debt" onchange="App.renderClients()">
+                                <option value="">Todos</option>
+                                <option value="devem">Devem</option>
+                                <option value="em-dia">Em dia</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Tipo Pagamento</label>
+                            <select id="client-filter-payment" onchange="App.renderClients()">
+                                <option value="">Todos</option>
+                                <option value="pix">PIX</option>
+                                <option value="dinheiro">Dinheiro</option>
+                                <option value="cartao">Cartão</option>
+                                <option value="boleto">Boleto</option>
+                                <option value="transferencia">Transferência</option>
+                                <option value="outro">Outro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-bottom:1rem;">
+                        <div class="sales-summary" id="clients-summary">
+                            <span>Total de Clientes: <strong>0</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Instagram</th>
+                                    <th>WhatsApp</th>
+                                    <th>Cidade</th>
+                                    <th>Email</th>
+                                    <th>Última Compra</th>
+                                    <th>Total Compras</th>
+                                    <th>Total Gasto</th>
+                                    <th>Total Devido</th>
+                                    <th>Pagamentos</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clients-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ===================================
+                     LIXEIRA (ADMIN)
+                     =================================== -->
+                <div id="section-trash" class="section admin-only">
+                    <div class="section-header">
+                        <h1><i data-lucide="trash"></i> Lixeira (30 dias)</h1>
+                        <button class="btn btn-secondary" onclick="App.purgeExpiredTrashNow()">
+                            <i data-lucide="timer-reset"></i> Limpar expirados
+                        </button>
+                    </div>
+
+                    <div class="sales-summary" id="trash-summary">
+                        <span>Itens na lixeira: <strong>0</strong></span>
+                    </div>
+
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Item</th>
+                                    <th>Excluído em</th>
+                                    <th>Expira em</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trash-body"></tbody>
                         </table>
                     </div>
                 </div>
@@ -447,6 +566,9 @@
                         <div style="display:flex;gap:0.5rem;">
                             <button class="btn btn-secondary" onclick="App.calcResetForm()">
                                 <i data-lucide="refresh-cw"></i> Limpar
+                            </button>
+                            <button class="btn btn-secondary" onclick="App.calcRegisterSaleFromCalculator()">
+                                <i data-lucide="wallet"></i> Registrar como Venda
                             </button>
                             <button class="btn btn-primary" onclick="App.calcSaveAsProduct()">
                                 <i data-lucide="package-plus"></i> Salvar como Produto
@@ -598,6 +720,9 @@
                                 </div>
                                 <button class="btn btn-primary" style="width:100%" onclick="App.calcSaveAsProduct()">
                                     <i data-lucide="save"></i> Salvar no Catálogo
+                                </button>
+                                <button class="btn btn-secondary" style="width:100%;margin-top:0.5rem;" onclick="App.calcRegisterSaleFromCalculator()">
+                                    <i data-lucide="receipt"></i> Registrar Venda Personalizada
                                 </button>
                             </div>
                         </div>

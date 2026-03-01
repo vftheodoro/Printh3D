@@ -224,8 +224,9 @@ const Dashboard = (() => {
 
         tbody.innerHTML = recent.map(s => {
             const product = products.find(p => p.id === s.product_id);
+            const itemName = s.item_nome || (product ? product.nome : 'Produto removido');
             return `<tr>
-                <td><strong>${escapeHtml(product ? product.nome : 'Produto removido')}</strong></td>
+                <td><strong>${escapeHtml(itemName)}</strong></td>
                 <td>${escapeHtml(s.cliente || '—')}</td>
                 <td>${Calculator.formatCurrency(s.valor_venda)}</td>
                 <td>${formatDate(s.data_venda)}</td>
@@ -280,10 +281,18 @@ const Dashboard = (() => {
     function getTopProduct(sales, products) {
         if (!sales || sales.length === 0) return null;
         const counts = {};
-        sales.forEach(s => { counts[s.product_id] = (counts[s.product_id] || 0) + 1; });
+        sales.forEach(s => {
+            const key = s.product_id ? `product:${s.product_id}` : `custom:${String(s.item_nome || 'Personalizado').trim()}`;
+            counts[key] = (counts[key] || 0) + 1;
+        });
         const topEntry = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
         if (!topEntry) return null;
-        const product = products.find(p => p.id === parseInt(topEntry[0]));
+        const key = topEntry[0];
+        if (key.startsWith('custom:')) {
+            return key.replace('custom:', '') || 'Personalizado';
+        }
+        const productId = parseInt(key.replace('product:', ''));
+        const product = products.find(p => p.id === productId);
         return product ? product.nome : 'Desconhecido';
     }
 

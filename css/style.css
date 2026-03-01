@@ -1156,6 +1156,55 @@ select {
     color: var(--text);
 }
 
+#section-sales .filters-bar,
+#section-clients .products-toolbar,
+#section-trash .sales-summary {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.85rem;
+    box-shadow: var(--shadow-sm);
+}
+
+#section-sales .table-container,
+#section-clients .table-container,
+#section-trash .table-container {
+    border-color: var(--border-hover);
+}
+
+#section-sales tbody tr {
+    transition: var(--transition);
+}
+
+#section-sales tbody tr:hover {
+    background: var(--accent-light);
+}
+
+.sale-item-meta {
+    font-size: 0.76rem;
+    margin-top: 0.2rem;
+    line-height: 1.35;
+}
+
+#section-sales td .badge,
+#section-clients td .badge,
+#section-trash td .badge {
+    font-size: 0.68rem;
+}
+
+#section-clients .sales-summary {
+    justify-content: flex-start;
+}
+
+#section-trash td:first-child {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+#section-trash .actions {
+    gap: 0.45rem;
+}
+
 /* ============================================
    CHART
    ============================================ */

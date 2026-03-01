@@ -5,7 +5,7 @@
 
 const Database = (() => {
     const DB_NAME = 'printh3d_pro';
-    const DB_VERSION = 1;
+    const DB_VERSION = 3;
     let db = null;
 
     const STORES = {
@@ -16,7 +16,9 @@ const Database = (() => {
         PRODUCT_FILES: 'product_files',
         PROMOTIONS: 'promotions',
         COUPONS: 'coupons',
-        SALES: 'sales'
+        SALES: 'sales',
+        CLIENTS: 'clients',
+        TRASH: 'trash'
     };
 
     // ------------------------------------------
@@ -85,11 +87,29 @@ const Database = (() => {
                     store.createIndex('vendedor_id', 'vendedor_id', { unique: false });
                     store.createIndex('data_venda', 'data_venda', { unique: false });
                 }
+
+                // Clients
+                if (!database.objectStoreNames.contains(STORES.CLIENTS)) {
+                    const store = database.createObjectStore(STORES.CLIENTS, { keyPath: 'id', autoIncrement: true });
+                    store.createIndex('nome', 'nome', { unique: false });
+                    store.createIndex('cidade', 'cidade', { unique: false });
+                    store.createIndex('whatsapp', 'whatsapp', { unique: false });
+                    store.createIndex('instagram', 'instagram', { unique: false });
+                }
+
+                // Trash (soft-deleted items with retention)
+                if (!database.objectStoreNames.contains(STORES.TRASH)) {
+                    const store = database.createObjectStore(STORES.TRASH, { keyPath: 'id', autoIncrement: true });
+                    store.createIndex('source_store', 'source_store', { unique: false });
+                    store.createIndex('deleted_at', 'deleted_at', { unique: false });
+                    store.createIndex('expires_at', 'expires_at', { unique: false });
+                }
             };
 
             request.onsuccess = (e) => {
                 db = e.target.result;
                 console.log('[Database] IndexedDB inicializado.');
+                purgeExpiredTrash().catch(() => {});
                 resolve(db);
             };
 
@@ -193,6 +213,22 @@ const Database = (() => {
                         desconto_percentual: 0,
                         cupom_id: null,
                         data_venda: s.data_venda
+                    });
+                }
+            }
+
+            // Clients
+            if (data.CLIENTS && data.CLIENTS.length > 0) {
+                for (const c of data.CLIENTS) {
+                    await add(STORES.CLIENTS, {
+                        nome: c.nome || '',
+                        instagram: c.instagram || '',
+                        whatsapp: c.whatsapp || '',
+                        cidade: c.cidade || '',
+                        email: c.email || '',
+                        observacoes: c.observacoes || '',
+                        created_at: c.created_at || new Date().toISOString(),
+                        updated_at: c.updated_at || new Date().toISOString()
                     });
                 }
             }
@@ -320,13 +356,62 @@ const Database = (() => {
         });
     }
 
-    function deleteById(storeName, id) {
+    async function deleteById(storeName, id) {
+        if (storeName !== STORES.TRASH) {
+            const existing = await getById(storeName, id);
+            if (existing) {
+                await addToTrash(storeName, existing, id);
+            }
+        }
+
         return new Promise((resolve, reject) => {
             const store = getTransaction(storeName, 'readwrite');
             const request = store.delete(id);
             request.onsuccess = () => resolve(true);
             request.onerror = (e) => reject(e.target.error);
         });
+    }
+
+    async function addToTrash(sourceStore, data, sourceId) {
+        if (!data) return null;
+
+        const now = new Date();
+        const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+        const itemName = data.nome || data.codigo_sku || data.nome_arquivo || data.codigo || data.item_nome || `ID ${sourceId}`;
+
+        return await add(STORES.TRASH, {
+            source_store: sourceStore,
+            source_id: sourceId,
+            item_name: String(itemName || ''),
+            payload: data,
+            deleted_at: now.toISOString(),
+            expires_at: expires.toISOString()
+        });
+    }
+
+    async function purgeExpiredTrash() {
+        const items = await getAll(STORES.TRASH);
+        const now = Date.now();
+        for (const item of items) {
+            const exp = new Date(item.expires_at).getTime();
+            if (!isNaN(exp) && exp <= now) {
+                await deleteById(STORES.TRASH, item.id);
+            }
+        }
+    }
+
+    async function restoreTrashItem(trashId) {
+        const item = await getById(STORES.TRASH, trashId);
+        if (!item || !item.payload || !item.source_store) {
+            throw new Error('Item da lixeira inválido.');
+        }
+
+        const sourceStore = item.source_store;
+        const payload = { ...item.payload };
+        await put(sourceStore, payload);
+        await deleteById(STORES.TRASH, trashId);
+        return true;
     }
 
     function getByIndex(storeName, indexName, value) {
@@ -574,7 +659,7 @@ const Database = (() => {
 
         // Export all stores as JSON (except files which are binary)
         const storeNames = [STORES.USERS, STORES.SETTINGS, STORES.CATEGORIES,
-                           STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES];
+                   STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES, STORES.CLIENTS, STORES.TRASH];
 
         for (const name of storeNames) {
             const data = await getAll(name);
@@ -607,7 +692,7 @@ const Database = (() => {
         const zip = await JSZip.loadAsync(file);
 
         const storeNames = [STORES.USERS, STORES.SETTINGS, STORES.CATEGORIES,
-                           STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES];
+                   STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES, STORES.CLIENTS, STORES.TRASH];
 
         // Clear all stores
         for (const name of storeNames) {
@@ -651,8 +736,8 @@ const Database = (() => {
     // ------------------------------------------
     async function exportExcel() {
         const workbook = XLSX.utils.book_new();
-        const storeNames = ['users', 'settings', 'categories', 'products', 'promotions', 'coupons', 'sales'];
-        const sheetLabels = ['USERS', 'SETTINGS', 'CATEGORIES', 'PRODUCTS', 'PROMOTIONS', 'COUPONS', 'SALES'];
+        const storeNames = ['users', 'settings', 'categories', 'products', 'promotions', 'coupons', 'sales', 'clients', 'trash'];
+        const sheetLabels = ['USERS', 'SETTINGS', 'CATEGORIES', 'PRODUCTS', 'PROMOTIONS', 'COUPONS', 'SALES', 'CLIENTS', 'TRASH'];
 
         for (let i = 0; i < storeNames.length; i++) {
             const data = await getAll(storeNames[i]);
@@ -702,6 +787,10 @@ const Database = (() => {
         getActivePromotion,
         getProductFiles,
         addProductFile,
+        // Trash
+        addToTrash,
+        purgeExpiredTrash,
+        restoreTrashItem,
         // Export/Import
         exportProductZip,
         exportFullBackup,

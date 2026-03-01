@@ -8,6 +8,7 @@ const App = (() => {
     let currentSection = 'dashboard';
     let editingProductId = null;
     let editingUserId = null;
+    let editingClientId = null;
     let productViewMode = 'table'; // 'table' | 'grid'
     let searchTimeout = null;
     let _confirmResolve = null;
@@ -213,10 +214,10 @@ const App = (() => {
 
         const titles = {
             dashboard: 'Dashboard', categories: 'Categorias',
-            products: 'Produtos', sales: 'Vendas',
+            products: 'Produtos', sales: 'Vendas', clients: 'Clientes',
             promotions: 'Promoções e Cupons',
             calculator: 'Calculadora de Custo',
-            settings: 'Configurações', users: 'Usuários'
+            settings: 'Configurações', users: 'Usuários', trash: 'Lixeira'
         };
         setText('page-title', titles[section] || '');
 
@@ -225,10 +226,12 @@ const App = (() => {
             case 'categories': await renderCategories(); break;
             case 'products':   await renderProducts(); break;
             case 'sales':      renderSales(); break;
+            case 'clients':    renderClients(); break;
             case 'promotions': await renderPromotions(); break;
             case 'calculator': await renderCalculator(); break;
             case 'settings':   renderSettings(); break;
             case 'users':      renderUsers(); break;
+            case 'trash':      await renderTrash(); break;
         }
 
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -253,6 +256,7 @@ const App = (() => {
         document.body.style.overflow = '';
         editingProductId = null;
         editingUserId = null;
+        editingClientId = null;
     }
 
     // ==========================================
@@ -1048,6 +1052,95 @@ const App = (() => {
     //  VENDAS — CRUD
     // ==========================================
 
+    function normalizeText(value) {
+        return String(value || '')
+            .normalize('NFD')
+            .replace(/\p{Diacritic}/gu, '')
+            .trim()
+            .toLowerCase();
+    }
+
+    function getKnownCities() {
+        const sales = Storage.getSheet('SALES');
+        const clients = Storage.getSheet('CLIENTS');
+        const set = new Set();
+
+        sales.forEach(s => {
+            if (s.cidade_entrega && String(s.cidade_entrega).trim()) {
+                set.add(String(s.cidade_entrega).trim());
+            }
+        });
+        clients.forEach(c => {
+            if (c.cidade && String(c.cidade).trim()) {
+                set.add(String(c.cidade).trim());
+            }
+        });
+
+        return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    }
+
+    function onSaleClientInput() {
+        const nome = document.getElementById('sale-cliente')?.value.trim();
+        if (!nome) return;
+
+        const clients = Storage.getSheet('CLIENTS');
+        const existing = clients.find(c => normalizeText(c.nome) === normalizeText(nome));
+        if (!existing) return;
+
+        const ig = document.getElementById('sale-client-instagram');
+        const wa = document.getElementById('sale-client-whatsapp');
+        const city = document.getElementById('sale-cidade');
+
+        if (ig && !ig.value.trim()) ig.value = existing.instagram || '';
+        if (wa && !wa.value.trim()) wa.value = existing.whatsapp || '';
+        if (city && !city.value.trim()) city.value = existing.cidade || '';
+    }
+
+    function upsertClientFromSale(clientData) {
+        const nome = (clientData.nome || '').trim();
+        if (!nome) return null;
+
+        const clients = Storage.getSheet('CLIENTS');
+        const nomeNorm = normalizeText(nome);
+        const whatsappNorm = normalizeText(clientData.whatsapp || '');
+        const instagramNorm = normalizeText(clientData.instagram || '');
+
+        const existing = clients.find(c => {
+            const sameName = normalizeText(c.nome) === nomeNorm;
+            const sameWhats = whatsappNorm && normalizeText(c.whatsapp) === whatsappNorm;
+            const sameInstagram = instagramNorm && normalizeText(c.instagram) === instagramNorm;
+            return sameName || sameWhats || sameInstagram;
+        });
+
+        const payload = {
+            nome,
+            instagram: (clientData.instagram || '').trim(),
+            whatsapp: (clientData.whatsapp || '').trim(),
+            cidade: (clientData.cidade || '').trim(),
+            email: (clientData.email || '').trim(),
+            observacoes: (clientData.observacoes || '').trim(),
+            updated_at: new Date().toISOString()
+        };
+
+        if (existing) {
+            Storage.updateRow('CLIENTS', existing.id, {
+                ...payload,
+                instagram: payload.instagram || existing.instagram || '',
+                whatsapp: payload.whatsapp || existing.whatsapp || '',
+                cidade: payload.cidade || existing.cidade || '',
+                email: payload.email || existing.email || '',
+                observacoes: payload.observacoes || existing.observacoes || ''
+            });
+            return existing.id;
+        }
+
+        const created = Storage.addRow('CLIENTS', {
+            ...payload,
+            created_at: new Date().toISOString()
+        });
+        return created.id;
+    }
+
     function renderSales() {
         const user = Auth.getCurrentUser();
         let sales = Storage.getSheet('SALES');
@@ -1097,7 +1190,7 @@ const App = (() => {
         if (!tbody) return;
 
         if (sales.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:2.5rem;"><div class="empty-state"><div class="empty-icon"><i data-lucide="wallet"></i></div><p>Nenhuma venda encontrada.</p></div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted" style="padding:2.5rem;"><div class="empty-state"><div class="empty-icon"><i data-lucide="wallet"></i></div><p>Nenhuma venda encontrada.</p></div></td></tr>`;
             refreshLucideIcons();
             return;
         }
@@ -1105,15 +1198,49 @@ const App = (() => {
         tbody.innerHTML = sales.map(s => {
             const product = products.find(p => p.id === s.product_id);
             const vendedor = users.find(u => u.id === s.vendedor_id);
+            const quantidade = Math.max(1, parseFloat(s.quantidade) || 1);
+            const tipoItem = s.tipo_item || (s.product_id ? 'catalogo' : 'personalizado');
+            const itemNome = s.item_nome || (product ? product.nome : 'Item removido');
+            const valorUnitario = parseFloat(s.valor_unitario);
+            const canal = s.canal_venda || 'outro';
+            const cidade = s.cidade_entrega || '—';
+            const tipoPagamento = s.tipo_pagamento || 'outro';
+            const valorDevido = Math.max(0, parseFloat(s.valor_devido) || 0);
             const lucroClass = (parseFloat(s.lucro) || 0) >= 0 ? 'text-success' : 'text-danger';
             const desconto = s.desconto_percentual ? s.desconto_percentual + '%' : '—';
             const cupom = s.cupom_codigo || '—';
 
+            const canalLabel = {
+                tiktok: 'TikTok',
+                shopee: 'Shopee',
+                instagram: 'Instagram',
+                whatsapp: 'WhatsApp',
+                outro: 'Outro'
+            }[canal] || 'Outro';
+
+            const pagamentoLabel = {
+                pix: 'PIX',
+                dinheiro: 'Dinheiro',
+                cartao: 'Cartão',
+                boleto: 'Boleto',
+                transferencia: 'Transferência',
+                outro: 'Outro'
+            }[tipoPagamento] || 'Outro';
+
             return `<tr>
                 <td>${Dashboard.formatDate(s.data_venda)}</td>
-                <td><strong>${escapeHtml(product ? product.nome : 'Removido')}</strong></td>
+                <td>
+                    <strong>${escapeHtml(itemNome)}</strong>
+                    <div class="sale-item-meta text-muted">
+                        ${tipoItem === 'personalizado' ? 'Personalizado' : 'Catálogo'} • Qtd: ${quantidade}${Number.isFinite(valorUnitario) ? ` • Unit: ${fmtC(valorUnitario)}` : ''}
+                    </div>
+                </td>
                 <td>${escapeHtml(s.cliente || '—')}</td>
+                <td><span class="badge badge-secondary">${canalLabel}</span></td>
+                <td>${escapeHtml(cidade)}</td>
+                <td><span class="badge badge-info">${pagamentoLabel}</span></td>
                 <td>${fmtC(s.valor_venda)}</td>
+                <td class="${valorDevido > 0 ? 'text-danger' : 'text-success'}">${fmtC(valorDevido)}</td>
                 <td>${desconto}</td>
                 <td class="${lucroClass}">${fmtC(s.lucro)}</td>
                 <td>${cupom !== '—' ? `<code>${escapeHtml(cupom)}</code>` : '—'}</td>
@@ -1124,41 +1251,140 @@ const App = (() => {
         refreshLucideIcons();
     }
 
-    async function openSaleModal() {
+    async function openSaleModal(initialData = null) {
         const products = await Database.getAll(Database.STORES.PRODUCTS);
         const activeProducts = products.filter(p => p.ativo !== false);
-
-        if (activeProducts.length === 0) {
-            showToast('Cadastre um produto antes de registrar vendas.', 'warning');
-            return;
-        }
+        const clients = Storage.getSheet('CLIENTS');
 
         const options = activeProducts.map(p =>
             `<option value="${p.id}" data-preco="${p.preco_venda}" data-custo="${p.custo_total}">${escapeHtml(p.nome)} — ${fmtC(p.preco_venda)}</option>`
         ).join('');
 
+        const clientOptions = clients
+            .slice()
+            .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+            .map(c => `<option value="${escapeHtml(c.nome || '')}"></option>`)
+            .join('');
+
+        const cityOptions = getKnownCities()
+            .map(c => `<option value="${escapeHtml(c)}"></option>`)
+            .join('');
+
         const now = new Date();
         const defaultDate = now.toISOString().slice(0, 16);
+        const mode = initialData?.mode === 'personalizado' ? 'personalizado' : 'catalogo';
+        const defaultQty = Math.max(1, parseFloat(initialData?.quantidade) || 1);
+        const defaultItemName = initialData?.item_nome || '';
+        const defaultPrice = Number.isFinite(parseFloat(initialData?.valor_unitario)) ? parseFloat(initialData?.valor_unitario) : 0;
+        const defaultCost = Number.isFinite(parseFloat(initialData?.custo_unitario)) ? parseFloat(initialData?.custo_unitario) : 0;
+        const defaultClient = initialData?.cliente || '';
+        const defaultInstagram = initialData?.cliente_instagram || '';
+        const defaultWhatsapp = initialData?.cliente_whatsapp || '';
+        const defaultCity = initialData?.cidade_entrega || '';
+        const defaultPaymentType = ['pix', 'dinheiro', 'cartao', 'boleto', 'transferencia', 'outro'].includes(initialData?.tipo_pagamento)
+            ? initialData.tipo_pagamento
+            : 'pix';
+        const defaultPaid = Number.isFinite(parseFloat(initialData?.valor_pago)) ? parseFloat(initialData.valor_pago) : '';
+        const defaultChannel = ['tiktok', 'shopee', 'instagram', 'whatsapp', 'outro'].includes(initialData?.canal_venda)
+            ? initialData.canal_venda
+            : 'outro';
+        const defaultObs = initialData?.observacoes || '';
 
         const html = `
         <form id="sale-form" onsubmit="event.preventDefault(); App.saveSale();">
-            <div class="form-group">
-                <label>Produto</label>
-                <select id="sale-product" required onchange="App.calcSalePreview()">
-                    <option value="">— Selecione um produto —</option>
-                    ${options}
-                </select>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Tipo de Venda</label>
+                    <select id="sale-mode" onchange="App.toggleSaleMode()">
+                        <option value="catalogo" ${mode === 'catalogo' ? 'selected' : ''}>Produto do catálogo</option>
+                        <option value="personalizado" ${mode === 'personalizado' ? 'selected' : ''}>Produto personalizado</option>
+                    </select>
+                </div>
+                <div class="form-group" id="sale-product-group">
+                    <label>Produto do Catálogo</label>
+                    <select id="sale-product" onchange="App.onSaleProductChange()">
+                        <option value="">— Selecione um produto —</option>
+                        ${options}
+                    </select>
+                    <small>Opcional para venda personalizada.</small>
+                </div>
+                <div class="form-group" id="sale-item-name-group">
+                    <label>Nome do Item</label>
+                    <input type="text" id="sale-item-name" value="${escapeHtml(defaultItemName)}" placeholder="Ex: Peça personalizada cliente XPTO" oninput="App.calcSalePreview()">
+                </div>
             </div>
+
             <div class="form-group">
                 <label>Nome do Cliente</label>
-                <input type="text" id="sale-cliente" placeholder="Nome do cliente (opcional)">
+                <input type="text" id="sale-cliente" list="sale-client-list" value="${escapeHtml(defaultClient)}" placeholder="Nome do cliente (opcional)" oninput="App.onSaleClientInput()">
+                <datalist id="sale-client-list">${clientOptions}</datalist>
             </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>@ Instagram do Cliente</label>
+                    <input type="text" id="sale-client-instagram" value="${escapeHtml(defaultInstagram)}" placeholder="@cliente">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp do Cliente</label>
+                    <input type="text" id="sale-client-whatsapp" value="${escapeHtml(defaultWhatsapp)}" placeholder="(11) 99999-9999">
+                </div>
+                <div class="form-group">
+                    <label>Cidade</label>
+                    <input type="text" id="sale-cidade" list="sale-city-list" value="${escapeHtml(defaultCity)}" placeholder="Cidade de entrega" required>
+                    <datalist id="sale-city-list">${cityOptions}</datalist>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Rede Social / Canal da Venda</label>
+                <select id="sale-canal" required>
+                    <option value="tiktok" ${defaultChannel === 'tiktok' ? 'selected' : ''}>TikTok</option>
+                    <option value="shopee" ${defaultChannel === 'shopee' ? 'selected' : ''}>Shopee</option>
+                    <option value="instagram" ${defaultChannel === 'instagram' ? 'selected' : ''}>Instagram</option>
+                    <option value="whatsapp" ${defaultChannel === 'whatsapp' ? 'selected' : ''}>WhatsApp</option>
+                    <option value="outro" ${defaultChannel === 'outro' ? 'selected' : ''}>Outro</option>
+                </select>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Quantidade</label>
+                    <input type="number" id="sale-qty" value="${defaultQty}" min="1" step="1" oninput="App.calcSalePreview()">
+                </div>
+                <div class="form-group">
+                    <label>Valor Unitário (R$)</label>
+                    <input type="number" id="sale-unit-price" value="${defaultPrice}" min="0" step="0.01" oninput="App.calcSalePreview()">
+                </div>
+                <div class="form-group">
+                    <label>Custo Unitário (R$)</label>
+                    <input type="number" id="sale-unit-cost" value="${defaultCost}" min="0" step="0.01" oninput="App.calcSalePreview()">
+                    <small>Para cálculo real de lucro.</small>
+                </div>
+            </div>
+
             <div class="form-grid">
                 <div class="form-group">
                     <label>Desconto (%)</label>
                     <input type="number" id="sale-desconto" value="0" min="0" max="100" step="0.5" oninput="App.calcSalePreview()">
                 </div>
                 <div class="form-group">
+                    <label>Tipo de Pagamento</label>
+                    <select id="sale-tipo-pagamento" oninput="App.calcSalePreview()">
+                        <option value="pix" ${defaultPaymentType === 'pix' ? 'selected' : ''}>PIX</option>
+                        <option value="dinheiro" ${defaultPaymentType === 'dinheiro' ? 'selected' : ''}>Dinheiro</option>
+                        <option value="cartao" ${defaultPaymentType === 'cartao' ? 'selected' : ''}>Cartão</option>
+                        <option value="boleto" ${defaultPaymentType === 'boleto' ? 'selected' : ''}>Boleto</option>
+                        <option value="transferencia" ${defaultPaymentType === 'transferencia' ? 'selected' : ''}>Transferência</option>
+                        <option value="outro" ${defaultPaymentType === 'outro' ? 'selected' : ''}>Outro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Valor Pago (R$)</label>
+                    <input type="number" id="sale-valor-pago" value="${defaultPaid}" min="0" step="0.01" oninput="App.calcSalePreview()">
+                    <small>Se menor que o valor final, fica registrado como valor devido.</small>
+                </div>
+                <div class="form-group" id="sale-cupom-group">
                     <label>Cupom</label>
                     <div style="display:flex;gap:0.5rem;">
                         <input type="text" id="sale-cupom" placeholder="Código do cupom" style="text-transform:uppercase">
@@ -1171,12 +1397,26 @@ const App = (() => {
                     <input type="datetime-local" id="sale-data" value="${defaultDate}">
                 </div>
             </div>
+
+            <div class="form-group">
+                <label>Observações</label>
+                <textarea id="sale-observacoes" rows="2" placeholder="Detalhes da venda, customizações, prazo, etc.">${escapeHtml(defaultObs)}</textarea>
+            </div>
+
+            <div class="form-group" id="sale-stock-group" style="display:flex;align-items:center;gap:0.75rem;">
+                <input type="checkbox" id="sale-update-stock" checked>
+                <label for="sale-update-stock" style="margin:0;cursor:pointer;">Baixar estoque automaticamente (somente catálogo)</label>
+            </div>
+
             <div id="sale-preview" class="calc-preview" style="display:none;">
                 <h4><i data-lucide="receipt"></i> Resumo</h4>
                 <div class="calc-grid">
-                    <div class="calc-item"><span>Preço Original</span><span id="sale-preco-original">—</span></div>
+                    <div class="calc-item"><span>Valor Bruto</span><span id="sale-valor-bruto">—</span></div>
+                    <div class="calc-item"><span>Custo Total</span><span id="sale-custo-total">—</span></div>
                     <div class="calc-item"><span>Desconto</span><span id="sale-desconto-valor" class="text-warning">—</span></div>
                     <div class="calc-item total"><span>Valor Final</span><span id="sale-valor-final">—</span></div>
+                    <div class="calc-item"><span>Valor Pago</span><span id="sale-valor-pago-prev">—</span></div>
+                    <div class="calc-item"><span>Valor Devido</span><span id="sale-valor-devido-prev">—</span></div>
                     <div class="calc-item success"><span>Lucro</span><span id="sale-lucro">—</span></div>
                 </div>
             </div>
@@ -1187,29 +1427,107 @@ const App = (() => {
         </form>`;
 
         openModal('Nova Venda', html);
+        if (initialData?.product_id) {
+            const sel = document.getElementById('sale-product');
+            if (sel) sel.value = String(initialData.product_id);
+        }
+        toggleSaleMode();
+        if (mode === 'catalogo') onSaleProductChange();
+        calcSalePreview();
     }
 
-    function calcSalePreview() {
+    function toggleSaleMode() {
+        const mode = document.getElementById('sale-mode')?.value || 'catalogo';
+        const productGroup = document.getElementById('sale-product-group');
+        const cupomGroup = document.getElementById('sale-cupom-group');
+        const stockGroup = document.getElementById('sale-stock-group');
+        const itemNameGroup = document.getElementById('sale-item-name-group');
+        const productSelect = document.getElementById('sale-product');
+        const itemNameInput = document.getElementById('sale-item-name');
+        const cupomInput = document.getElementById('sale-cupom');
+        const cupomMsg = document.getElementById('sale-cupom-msg');
+
+        const isCatalog = mode === 'catalogo';
+        if (productGroup) productGroup.classList.toggle('hidden', !isCatalog);
+        if (cupomGroup) cupomGroup.classList.toggle('hidden', !isCatalog);
+        if (stockGroup) stockGroup.classList.toggle('hidden', !isCatalog);
+        if (itemNameGroup) itemNameGroup.classList.toggle('hidden', isCatalog);
+
+        if (productSelect) productSelect.required = isCatalog;
+        if (itemNameInput) itemNameInput.required = !isCatalog;
+
+        if (!isCatalog) {
+            if (cupomInput) cupomInput.value = '';
+            if (cupomMsg) { cupomMsg.textContent = ''; cupomMsg.className = 'text-muted'; }
+        }
+
+        calcSalePreview();
+    }
+
+    function onSaleProductChange() {
+        const mode = document.getElementById('sale-mode')?.value || 'catalogo';
+        if (mode !== 'catalogo') return;
+
         const select = document.getElementById('sale-product');
         const option = select?.options[select.selectedIndex];
         if (!option || !option.value) {
+            calcSalePreview();
+            return;
+        }
+
+        const unitPrice = parseFloat(option.dataset.preco) || 0;
+        const unitCost = parseFloat(option.dataset.custo) || 0;
+        const priceInput = document.getElementById('sale-unit-price');
+        const costInput = document.getElementById('sale-unit-cost');
+        const itemNameInput = document.getElementById('sale-item-name');
+
+        if (priceInput && (!priceInput.value || parseFloat(priceInput.value) <= 0)) priceInput.value = String(unitPrice);
+        if (costInput && (!costInput.value || parseFloat(costInput.value) <= 0)) costInput.value = String(unitCost);
+        if (itemNameInput && !itemNameInput.value.trim()) itemNameInput.value = option.textContent.split(' — ')[0] || '';
+
+        calcSalePreview();
+    }
+
+    function calcSalePreview() {
+        const mode = document.getElementById('sale-mode')?.value || 'catalogo';
+        const select = document.getElementById('sale-product');
+        const option = select?.options[select.selectedIndex];
+        const itemName = document.getElementById('sale-item-name')?.value.trim() || '';
+        const qty = Math.max(1, parseFloat(document.getElementById('sale-qty')?.value) || 1);
+        const precoUnit = Math.max(0, parseFloat(document.getElementById('sale-unit-price')?.value) || 0);
+        const custoUnit = Math.max(0, parseFloat(document.getElementById('sale-unit-cost')?.value) || 0);
+        const desconto = parseFloat(document.getElementById('sale-desconto')?.value) || 0;
+        const valorPagoField = document.getElementById('sale-valor-pago');
+
+        const isCatalog = mode === 'catalogo';
+        const hasCatalogSelection = option && option.value;
+        const hasCustomName = !!itemName;
+        if ((isCatalog && !hasCatalogSelection) || (!isCatalog && !hasCustomName)) {
             const p = document.getElementById('sale-preview');
             if (p) p.style.display = 'none';
             return;
         }
 
-        const preco = parseFloat(option.dataset.preco) || 0;
-        const custo = parseFloat(option.dataset.custo) || 0;
-        const desconto = parseFloat(document.getElementById('sale-desconto')?.value) || 0;
-
-        const descontoValor = preco * (desconto / 100);
-        const valorFinal = preco - descontoValor;
-        const lucro = valorFinal - custo;
+        const valorBruto = qty * precoUnit;
+        const descontoValor = valorBruto * (desconto / 100);
+        const valorFinal = Math.max(0, valorBruto - descontoValor);
+        const custoTotal = qty * custoUnit;
+        const lucro = valorFinal - custoTotal;
+        const valorPagoInput = valorPagoField && String(valorPagoField.value).trim() === ''
+            ? valorFinal
+            : Math.max(0, parseFloat(valorPagoField?.value) || 0);
+        const valorPago = Math.min(valorFinal, valorPagoInput);
+        const valorDevido = Math.max(0, valorFinal - valorPago);
 
         document.getElementById('sale-preview').style.display = 'block';
-        setText('sale-preco-original', fmtC(preco));
+        setText('sale-valor-bruto', fmtC(valorBruto));
+        setText('sale-custo-total', fmtC(custoTotal));
         setText('sale-desconto-valor', `- ${fmtC(descontoValor)}`);
         setText('sale-valor-final', fmtC(valorFinal));
+        setText('sale-valor-pago-prev', fmtC(valorPago));
+        setText('sale-valor-devido-prev', fmtC(valorDevido));
+        const dueEl = document.getElementById('sale-valor-devido-prev');
+        if (dueEl) dueEl.className = valorDevido > 0 ? 'text-danger' : 'text-success';
         const lucroEl = document.getElementById('sale-lucro');
         if (lucroEl) {
             lucroEl.textContent = fmtC(lucro);
@@ -1222,6 +1540,12 @@ const App = (() => {
         const msgEl = document.getElementById('sale-cupom-msg');
         if (!code) { if (msgEl) msgEl.textContent = ''; return; }
 
+        const mode = document.getElementById('sale-mode')?.value || 'catalogo';
+        if (mode !== 'catalogo') {
+            if (msgEl) { msgEl.textContent = 'Cupom disponível apenas para produtos do catálogo.'; msgEl.className = 'text-warning'; }
+            return;
+        }
+
         const productId = parseInt(document.getElementById('sale-product')?.value);
         const result = await Promotions.validateCoupon(code, productId || null);
 
@@ -1233,10 +1557,8 @@ const App = (() => {
         if (msgEl) { msgEl.textContent = `✓ Cupom válido! ${result.coupon.tipo_desconto === 'percentual' ? result.coupon.valor_desconto + '% off' : 'R$' + result.coupon.valor_desconto + ' off'}`; msgEl.className = 'text-success'; }
 
         // Apply discount to form
-        const select = document.getElementById('sale-product');
-        const option = select?.options[select.selectedIndex];
-        if (option && option.value) {
-            const preco = parseFloat(option.dataset.preco) || 0;
+        const preco = Math.max(0, parseFloat(document.getElementById('sale-unit-price')?.value) || 0);
+        if (preco > 0) {
             const newPrice = await Promotions.applyCoupon(result.coupon, preco);
             const pct = preco > 0 ? ((preco - newPrice) / preco * 100) : 0;
             document.getElementById('sale-desconto').value = pct.toFixed(1);
@@ -1245,44 +1567,97 @@ const App = (() => {
     }
 
     async function saveSale() {
+        const mode = document.getElementById('sale-mode')?.value || 'catalogo';
         const select = document.getElementById('sale-product');
         const option = select?.options[select.selectedIndex];
-        if (!option || !option.value) { showToast('Selecione um produto.', 'warning'); return; }
+        const isCatalog = mode === 'catalogo';
+        if (isCatalog && (!option || !option.value)) { showToast('Selecione um produto do catálogo.', 'warning'); return; }
 
-        const productId = parseInt(option.value);
-        const preco = parseFloat(option.dataset.preco) || 0;
-        const custo = parseFloat(option.dataset.custo) || 0;
+        const productId = isCatalog ? parseInt(option.value) : null;
+        const itemNome = (document.getElementById('sale-item-name')?.value.trim() || (isCatalog ? option.textContent.split(' — ')[0] : '')).trim();
+        if (!itemNome) { showToast('Informe o nome do item da venda.', 'warning'); return; }
+
+        const qty = Math.max(1, parseFloat(document.getElementById('sale-qty')?.value) || 1);
+        const precoUnit = Math.max(0, parseFloat(document.getElementById('sale-unit-price')?.value) || 0);
+        const custoUnit = Math.max(0, parseFloat(document.getElementById('sale-unit-cost')?.value) || 0);
         const desconto = parseFloat(document.getElementById('sale-desconto')?.value) || 0;
         const cliente = document.getElementById('sale-cliente')?.value.trim() || '';
+        const clienteInstagram = document.getElementById('sale-client-instagram')?.value.trim() || '';
+        const clienteWhatsapp = document.getElementById('sale-client-whatsapp')?.value.trim() || '';
+        const cidadeEntrega = document.getElementById('sale-cidade')?.value.trim() || '';
+        const canalVenda = document.getElementById('sale-canal')?.value || 'outro';
+        const tipoPagamento = document.getElementById('sale-tipo-pagamento')?.value || 'pix';
+        const observacoes = document.getElementById('sale-observacoes')?.value.trim() || '';
         const dataVenda = document.getElementById('sale-data')?.value;
         const cupomCode = document.getElementById('sale-cupom')?.value.trim().toUpperCase() || '';
+        const valorPagoField = document.getElementById('sale-valor-pago');
 
-        const valorVenda = Calculator.round2(preco * (1 - desconto / 100));
-        const lucro = Calculator.round2(valorVenda - custo);
+        if (precoUnit <= 0) { showToast('Informe um valor unitário maior que zero.', 'warning'); return; }
+        if (!cidadeEntrega) { showToast('Informe a cidade da venda.', 'warning'); return; }
+
+        const valorBruto = Calculator.round2(qty * precoUnit);
+        const descontoValor = Calculator.round2(valorBruto * (desconto / 100));
+        const valorVenda = Calculator.round2(Math.max(0, valorBruto - descontoValor));
+        const custoTotal = Calculator.round2(qty * custoUnit);
+        const lucro = Calculator.round2(valorVenda - custoTotal);
+        const valorPagoInput = valorPagoField && String(valorPagoField.value).trim() === ''
+            ? valorVenda
+            : Math.max(0, parseFloat(valorPagoField?.value) || 0);
+        const valorPago = Calculator.round2(Math.min(valorVenda, valorPagoInput));
+        const valorDevido = Calculator.round2(Math.max(0, valorVenda - valorPago));
+        const statusPagamento = valorDevido <= 0 ? 'pago' : (valorPago > 0 ? 'parcial' : 'pendente');
+
         const user = Auth.getCurrentUser();
 
         // If coupon was used, increment usage
-        if (cupomCode) {
+        if (isCatalog && cupomCode) {
             const coupon = await Promotions.getCouponByCode(cupomCode);
             if (coupon) await Promotions.useCoupon(coupon.id);
         }
 
         // Decrement stock
-        const product = await Database.getById(Database.STORES.PRODUCTS, productId);
-        if (product && product.quantidade_estoque > 0) {
-            await Database.update(Database.STORES.PRODUCTS, productId, {
-                quantidade_estoque: product.quantidade_estoque - 1
-            });
+        const shouldUpdateStock = document.getElementById('sale-update-stock')?.checked !== false;
+        if (isCatalog && shouldUpdateStock) {
+            const product = await Database.getById(Database.STORES.PRODUCTS, productId);
+            if (product) {
+                await Database.update(Database.STORES.PRODUCTS, productId, {
+                    quantidade_estoque: Math.max(0, (product.quantidade_estoque || 0) - qty)
+                });
+            }
         }
+
+        const clientId = upsertClientFromSale({
+            nome: cliente,
+            instagram: clienteInstagram,
+            whatsapp: clienteWhatsapp,
+            cidade: cidadeEntrega
+        });
 
         Storage.addRow('SALES', {
             product_id: productId,
+            client_id: clientId,
+            item_nome: itemNome,
+            tipo_item: isCatalog ? 'catalogo' : 'personalizado',
+            quantidade: qty,
+            valor_unitario: precoUnit,
+            custo_unitario: custoUnit,
+            valor_bruto: valorBruto,
             vendedor_id: user.id,
             cliente,
+            cliente_instagram: clienteInstagram,
+            cliente_whatsapp: clienteWhatsapp,
+            cidade_entrega: cidadeEntrega,
+            canal_venda: canalVenda,
+            tipo_pagamento: tipoPagamento,
+            status_pagamento: statusPagamento,
+            valor_pago: valorPago,
+            valor_devido: valorDevido,
             valor_venda: valorVenda,
             lucro,
             desconto_percentual: desconto,
-            cupom_codigo: cupomCode || null,
+            desconto_valor: descontoValor,
+            cupom_codigo: isCatalog ? (cupomCode || null) : null,
+            observacoes,
             data_venda: dataVenda || new Date().toISOString()
         });
 
@@ -1291,8 +1666,320 @@ const App = (() => {
         renderSales();
     }
 
+    function calcRegisterSaleFromCalculator() {
+        const result = calcAdvanced._lastResult;
+        if (!result || result.custoTotal <= 0 || result.precoVenda <= 0) {
+            showToast('Faça um cálculo válido antes de registrar a venda.', 'warning');
+            return;
+        }
+
+        const nome = document.getElementById('adv-nome-produto')?.value.trim() || 'Produto Personalizado';
+        openSaleModal({
+            mode: 'personalizado',
+            item_nome: nome,
+            quantidade: 1,
+            valor_unitario: result.precoVenda,
+            custo_unitario: result.custoTotal,
+            canal_venda: 'outro',
+            observacoes: 'Venda criada pela calculadora avançada.'
+        });
+    }
+
     function filterSales() {
         renderSales();
+    }
+
+    // ==========================================
+    //  CLIENTES — CRUD
+    // ==========================================
+
+    function getClientSalesStats(client) {
+        const sales = Storage.getSheet('SALES');
+        const normName = normalizeText(client.nome);
+        const rows = sales.filter(s =>
+            (client.id && s.client_id === client.id) ||
+            (!s.client_id && normalizeText(s.cliente) === normName)
+        );
+
+        const totalCompras = rows.length;
+        const totalGasto = rows.reduce((sum, s) => sum + (parseFloat(s.valor_venda) || 0), 0);
+        const totalDevido = rows.reduce((sum, s) => sum + (Math.max(0, parseFloat(s.valor_devido) || 0)), 0);
+        const ultimaData = rows.length > 0
+            ? rows.map(s => new Date(s.data_venda).getTime()).filter(Boolean).sort((a, b) => b - a)[0]
+            : null;
+        const paymentTypes = Array.from(new Set(rows.map(s => s.tipo_pagamento).filter(Boolean)));
+
+        return {
+            totalCompras,
+            totalGasto,
+            totalDevido,
+            paymentTypes,
+            ultimaCompra: ultimaData ? new Date(ultimaData).toISOString() : null
+        };
+    }
+
+    function renderClients() {
+        const tbody = document.getElementById('clients-body');
+        if (!tbody) return;
+
+        const search = normalizeText(document.getElementById('client-search')?.value || '');
+        const rankFilter = String(document.getElementById('client-filter-ranking')?.value || '').trim();
+        const debtFilter = String(document.getElementById('client-filter-debt')?.value || '').trim();
+        const paymentFilter = String(document.getElementById('client-filter-payment')?.value || '').trim();
+        let clients = Storage.getSheet('CLIENTS').slice();
+
+        const clientsWithStats = clients.map(c => ({
+            ...c,
+            _stats: getClientSalesStats(c)
+        }));
+
+        if (search) {
+            clients = clientsWithStats.filter(c => {
+                return normalizeText(c.nome).includes(search) ||
+                    normalizeText(c.instagram).includes(search) ||
+                    normalizeText(c.whatsapp).includes(search) ||
+                    normalizeText(c.cidade).includes(search) ||
+                    normalizeText(c.email).includes(search);
+            });
+        } else {
+            clients = clientsWithStats;
+        }
+
+        if (debtFilter === 'devem') {
+            clients = clients.filter(c => (c._stats?.totalDevido || 0) > 0);
+        } else if (debtFilter === 'em-dia') {
+            clients = clients.filter(c => (c._stats?.totalDevido || 0) <= 0);
+        }
+
+        if (paymentFilter) {
+            clients = clients.filter(c => (c._stats?.paymentTypes || []).includes(paymentFilter));
+        }
+
+        if (rankFilter === 'mais-compram') {
+            clients.sort((a, b) => (b._stats?.totalCompras || 0) - (a._stats?.totalCompras || 0));
+        } else if (rankFilter === 'menos-compram') {
+            clients.sort((a, b) => (a._stats?.totalCompras || 0) - (b._stats?.totalCompras || 0));
+        } else {
+            clients.sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
+        }
+
+        const summary = document.getElementById('clients-summary');
+        if (summary) {
+            summary.innerHTML = `
+                <span>Total de Clientes: <strong>${clients.length}</strong></span>`;
+        }
+
+        if (clients.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted" style="padding:2rem;">Nenhum cliente encontrado.</td></tr>`;
+            refreshLucideIcons();
+            return;
+        }
+
+        tbody.innerHTML = clients.map(c => {
+            const stats = c._stats || getClientSalesStats(c);
+            const paymentLabel = (stats.paymentTypes || []).length > 0
+                ? stats.paymentTypes.map(t => ({
+                    pix: 'PIX', dinheiro: 'Dinheiro', cartao: 'Cartão', boleto: 'Boleto', transferencia: 'Transferência', outro: 'Outro'
+                }[t] || t)).join(', ')
+                : '—';
+            return `<tr>
+                <td><strong>${escapeHtml(c.nome || '—')}</strong></td>
+                <td>${c.instagram ? `<code>${escapeHtml(c.instagram)}</code>` : '—'}</td>
+                <td>${escapeHtml(c.whatsapp || '—')}</td>
+                <td>${escapeHtml(c.cidade || '—')}</td>
+                <td>${escapeHtml(c.email || '—')}</td>
+                <td>${stats.ultimaCompra ? Dashboard.formatDate(stats.ultimaCompra) : '—'}</td>
+                <td>${stats.totalCompras}</td>
+                <td>${fmtC(stats.totalGasto)}</td>
+                <td class="${stats.totalDevido > 0 ? 'text-danger' : 'text-success'}">${fmtC(stats.totalDevido)}</td>
+                <td>${escapeHtml(paymentLabel)}</td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.openClientModal(${c.id})" title="Editar"><i data-lucide="pencil"></i></button>
+                    <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.deleteClient(${c.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        refreshLucideIcons();
+    }
+
+    function openClientModal(id) {
+        editingClientId = id || null;
+        const client = id ? Storage.getRowById('CLIENTS', id) : null;
+        const title = client ? 'Editar Cliente' : 'Novo Cliente';
+
+        const cityOptions = getKnownCities()
+            .map(c => `<option value="${escapeHtml(c)}"></option>`)
+            .join('');
+
+        const html = `
+        <form id="client-form" onsubmit="event.preventDefault(); App.saveClient();">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nome</label>
+                    <input type="text" id="client-nome" value="${escapeHtml(client?.nome || '')}" required placeholder="Nome do cliente">
+                </div>
+                <div class="form-group">
+                    <label>@ Instagram</label>
+                    <input type="text" id="client-instagram" value="${escapeHtml(client?.instagram || '')}" placeholder="@cliente">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp</label>
+                    <input type="text" id="client-whatsapp" value="${escapeHtml(client?.whatsapp || '')}" placeholder="(11) 99999-9999">
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Cidade</label>
+                    <input type="text" id="client-cidade" list="client-city-list-modal" value="${escapeHtml(client?.cidade || '')}" placeholder="Cidade">
+                    <datalist id="client-city-list-modal">${cityOptions}</datalist>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="client-email" value="${escapeHtml(client?.email || '')}" placeholder="email@exemplo.com">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Observações</label>
+                <textarea id="client-observacoes" rows="3" placeholder="Anotações sobre o cliente...">${escapeHtml(client?.observacoes || '')}</textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> ${client ? 'Atualizar' : 'Salvar Cliente'}</button>
+            </div>
+        </form>`;
+
+        openModal(title, html);
+    }
+
+    function saveClient() {
+        const nome = document.getElementById('client-nome')?.value.trim();
+        if (!nome) {
+            showToast('Nome do cliente é obrigatório.', 'warning');
+            return;
+        }
+
+        const data = {
+            nome,
+            instagram: document.getElementById('client-instagram')?.value.trim() || '',
+            whatsapp: document.getElementById('client-whatsapp')?.value.trim() || '',
+            cidade: document.getElementById('client-cidade')?.value.trim() || '',
+            email: document.getElementById('client-email')?.value.trim() || '',
+            observacoes: document.getElementById('client-observacoes')?.value.trim() || '',
+            updated_at: new Date().toISOString()
+        };
+
+        const all = Storage.getSheet('CLIENTS');
+        const duplicate = all.find(c => normalizeText(c.nome) === normalizeText(nome) && c.id !== editingClientId);
+        if (duplicate) {
+            showToast('Já existe cliente com este nome.', 'danger');
+            return;
+        }
+
+        if (editingClientId) {
+            Storage.updateRow('CLIENTS', editingClientId, data);
+            showToast('Cliente atualizado!', 'success');
+        } else {
+            Storage.addRow('CLIENTS', {
+                ...data,
+                created_at: new Date().toISOString()
+            });
+            showToast('Cliente cadastrado!', 'success');
+        }
+
+        closeModal();
+        renderClients();
+    }
+
+    async function deleteClient(id) {
+        const client = Storage.getRowById('CLIENTS', id);
+        if (!client) return;
+
+        const ok = await confirmDialog('Excluir Cliente', `Excluir "${client.nome}"?`);
+        if (!ok) return;
+
+        Storage.deleteRow('CLIENTS', id);
+        showToast('Cliente excluído.', 'success');
+        renderClients();
+    }
+
+    // ==========================================
+    //  LIXEIRA (30 DIAS)
+    // ==========================================
+
+    function formatTrashStoreName(store) {
+        const map = {
+            users: 'Usuários',
+            settings: 'Configurações',
+            categories: 'Categorias',
+            products: 'Produtos',
+            product_files: 'Arquivos de Produto',
+            promotions: 'Promoções',
+            coupons: 'Cupons',
+            sales: 'Vendas',
+            clients: 'Clientes'
+        };
+        return map[store] || store;
+    }
+
+    async function renderTrash() {
+        const tbody = document.getElementById('trash-body');
+        if (!tbody) return;
+
+        await Database.purgeExpiredTrash();
+        const items = await Database.getAll(Database.STORES.TRASH);
+        items.sort((a, b) => new Date(b.deleted_at) - new Date(a.deleted_at));
+
+        const summary = document.getElementById('trash-summary');
+        if (summary) {
+            summary.innerHTML = `<span>Itens na lixeira: <strong>${items.length}</strong></span>`;
+        }
+
+        if (items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted" style="padding:2rem;">Lixeira vazia.</td></tr>`;
+            refreshLucideIcons();
+            return;
+        }
+
+        tbody.innerHTML = items.map(item => {
+            return `<tr>
+                <td>${escapeHtml(formatTrashStoreName(item.source_store || '—'))}</td>
+                <td><strong>${escapeHtml(item.item_name || 'Item sem nome')}</strong></td>
+                <td>${Dashboard.formatDate(item.deleted_at)}</td>
+                <td>${Dashboard.formatDate(item.expires_at)}</td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.restoreTrashItem(${item.id})" title="Restaurar"><i data-lucide="undo-2"></i></button>
+                    <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="App.permanentDeleteTrashItem(${item.id})" title="Excluir definitivamente"><i data-lucide="trash-2"></i></button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        refreshLucideIcons();
+    }
+
+    async function restoreTrashItem(id) {
+        try {
+            await Database.restoreTrashItem(id);
+            await Storage.refreshCache();
+            showToast('Item restaurado com sucesso.', 'success');
+            await renderTrash();
+        } catch (err) {
+            showToast('Não foi possível restaurar: ' + err.message, 'danger');
+        }
+    }
+
+    async function permanentDeleteTrashItem(id) {
+        const ok = await confirmDialog('Excluir Definitivamente', 'Este item será removido da lixeira permanentemente. Continuar?');
+        if (!ok) return;
+        await Database.deleteById(Database.STORES.TRASH, id);
+        showToast('Item removido da lixeira.', 'success');
+        await renderTrash();
+    }
+
+    async function purgeExpiredTrashNow() {
+        await Database.purgeExpiredTrash();
+        showToast('Itens expirados removidos da lixeira.', 'success');
+        await renderTrash();
     }
 
     // ==========================================
@@ -1947,12 +2634,16 @@ const App = (() => {
         toggleProductView, debounceProductSearch, filterProducts,
         refreshProductFiles, removeProductFile, downloadProductZip,
         // Sales
-        openSaleModal, calcSalePreview, applySaleCoupon, saveSale, filterSales,
+        openSaleModal, toggleSaleMode, onSaleProductChange, onSaleClientInput, calcSalePreview, applySaleCoupon, saveSale, filterSales,
+        // Clients
+        renderClients, openClientModal, saveClient, deleteClient,
+        // Trash
+        renderTrash, restoreTrashItem, permanentDeleteTrashItem, purgeExpiredTrashNow,
         // Promotions
         switchPromoTab, openPromotionModal, savePromotion, togglePromotion, deletePromotion,
         openCouponModal, saveCoupon, toggleCoupon, deleteCoupon,
         // Calculator
-        calcAdvanced, calcResetForm, calcSaveAsProduct,
+        calcAdvanced, calcResetForm, calcSaveAsProduct, calcRegisterSaleFromCalculator,
         // Settings & Users
         saveSettings, openUserModal, saveUser, deleteUser
     };
