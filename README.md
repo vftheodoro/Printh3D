@@ -4,7 +4,7 @@ Sistema web de gestão para operação comercial de impressão 3D, com autentica
 
 ## 1) Visão geral
 
-O projeto é um front-end em HTML/CSS/JavaScript puro (sem backend obrigatório) com persistência local via IndexedDB.
+O projeto é um front-end em HTML/CSS/JavaScript puro (sem backend obrigatório) com persistência local via IndexedDB e espelhamento opcional em Pasta Raiz do projeto (arquivos legíveis e recuperáveis manualmente).
 
 Principais objetivos:
 - Centralizar operação comercial da gráfica 3D.
@@ -13,6 +13,7 @@ Principais objetivos:
 - Controlar receitas, gastos e valores pendentes de recebimento.
 - Manter histórico com recuperação de itens excluídos por 30 dias.
 - Manter dados locais com exportação/importação de backup.
+- Permitir recuperação manual completa por arquivos na raiz selecionada.
 
 ## 2) Funcionalidades
 
@@ -91,6 +92,25 @@ Principais objetivos:
 - Importação de ZIP de backup completo.
 - Importação de planilha para compatibilidade.
 
+### Pasta Raiz (espelho físico de dados)
+- Onboarding automático para ADMIN quando o sistema não identifica Pasta Raiz conectada.
+- Explica o funcionamento e oferece 2 opções:
+  - Sincronizar pasta existente (restaura dados se encontrar backup válido)
+  - Criar pasta do zero (gera estrutura e sincroniza o estado atual)
+- Sincronização automática após alterações de dados (com debounce) quando a pasta está conectada.
+- Botões manuais de sincronização/restauração:
+  - Sidebar: "Sincronizar Pasta Raiz"
+  - Configurações: conectar, sincronizar agora e restaurar da pasta
+- Persistência da pasta autorizada no navegador para reconexão automática (quando a permissão continuar válida).
+
+Estrutura criada na pasta selecionada:
+- `printh3d_data/manifest.json`
+- `printh3d_data/README.txt`
+- `printh3d_data/data/*.json` (users, settings, categories, products, promotions, coupons, sales, clients, expenses, trash, product_files_meta)
+- `printh3d_data/files/images|models_3d|documents|others`
+- `printh3d_data/config/ui_state.json` (filtros/visualização)
+- `printh3d_data/config/session_state.json` (estado de sessão exportado)
+
 ## 3) Tecnologias
 
 - HTML5 + CSS3
@@ -115,6 +135,7 @@ Principais objetivos:
 - js/filemanager.js: arquivos por produto
 - js/calculator.js: cálculo de custo/preço
 - js/dashboard.js: KPIs e gráficos
+- js/root-storage.js: espelho em Pasta Raiz (sync/restore + onboarding support)
 - js/app.js: orquestração da UI
 - docs/: documentação completa
 
@@ -123,6 +144,7 @@ Principais objetivos:
 Opção simples:
 1. Abra login.html no navegador.
 2. Faça login.
+3. Se for ADMIN e não houver Pasta Raiz conectada, siga o assistente inicial para sincronizar pasta existente ou criar uma nova.
 
 Opção recomendada (ambiente local):
 1. Rode um servidor estático local (ex.: extensão Live Server no VS Code).
@@ -135,11 +157,11 @@ Opção recomendada (ambiente local):
 
 ## 7) Política de dados e GitHub
 
-Este sistema salva dados operacionais no IndexedDB do navegador, não em arquivos do repositório.
+Este sistema salva dados operacionais no IndexedDB do navegador e pode manter cópia física em Pasta Raiz escolhida pelo usuário.
 
-Para evitar versionamento acidental de backups/exportações:
+Para evitar versionamento acidental de backups/exportações e dados espelhados:
 - Foi adicionado um arquivo .gitignore com regras para arquivos de backup (.zip/.xlsx etc).
-- Recomenda-se salvar backups em pastas locais como backups/ ou exports/.
+- Recomenda-se NÃO sincronizar a pasta `printh3d_data/` com repositórios públicos.
 - Arquivos de segredos (ex.: .env, .pem, .key, tokens) também estão bloqueados no .gitignore.
 
 Dados sensíveis que **não devem** ir para o GitHub:
@@ -163,7 +185,9 @@ Se algum arquivo de dados já foi rastreado no Git antes:
 ## 9) Observações importantes
 
 - Como é um app local/browser, cada navegador/perfil mantém seu próprio IndexedDB.
+- O acesso à Pasta Raiz depende da permissão do navegador (File System Access API).
 - Para trocar de máquina ou navegador, exporte backup e importe no novo ambiente.
+- Se usar Pasta Raiz, leve também a pasta `printh3d_data/` para restaurar manualmente o ambiente.
 - Em produção corporativa, recomenda-se backend com controle de acesso centralizado e auditoria.
 
 ## 10) Checklist rápido antes de subir para GitHub

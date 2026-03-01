@@ -8,7 +8,7 @@ Camadas:
 1. Interface: index.html, login.html, css/style.css.
 2. Orquestração: js/app.js (navegação e eventos).
 3. Domínio: categories, promotions, calculator, dashboard, filemanager, auth.
-4. Persistência: js/database.js (IndexedDB) e js/storage.js (cache/compatibilidade).
+4. Persistência: js/database.js (IndexedDB), js/storage.js (cache/compatibilidade) e js/root-storage.js (espelho em Pasta Raiz).
 
 ## 2. Fluxo de inicialização
 
@@ -21,7 +21,9 @@ Tela de login:
 Tela principal:
 1. App.init() chama Storage.init().
 2. Valida sessão via Auth.checkAuth().
-3. Configura navegação, listeners e seção inicial (dashboard).
+3. Tenta reconectar Pasta Raiz salva (quando permissão de navegador estiver válida).
+4. Se ADMIN e sem Pasta Raiz ativa, abre onboarding explicando o sistema e perguntando entre sincronizar pasta existente ou criar do zero.
+5. Configura navegação, listeners e seção inicial (dashboard).
 
 ## 3. Módulos principais
 
@@ -66,6 +68,13 @@ Tela principal:
 - Controlador principal da interface.
 - Renderização de listas, modais e ações do usuário.
 - Módulos funcionais de vendas, clientes, gastos e lixeira.
+- Onboarding da Pasta Raiz no início da sessão ADMIN.
+
+## root-storage.js
+- Integração com File System Access API.
+- Conexão de pasta, persistência do handle autorizado e reconexão automática.
+- Espelho completo do banco em `printh3d_data/` (JSON + binários organizados por tipo).
+- Restauração completa para IndexedDB a partir dos arquivos da Pasta Raiz.
 
 ## 4. Stores de dados (IndexedDB)
 
@@ -87,6 +96,12 @@ Observações de modelagem:
 - `clients` pode ser atualizado automaticamente a partir de vendas.
 - `expenses` permite despesas operacionais gerais (insumos, logística, etc).
 - `trash` guarda payload do item excluído e data de expiração (+30 dias).
+
+Espelho físico na Pasta Raiz:
+- `printh3d_data/data/*.json`: stores transacionais e metadados de arquivos.
+- `printh3d_data/files/images|models_3d|documents|others`: blobs exportados em arquivos reais.
+- `printh3d_data/config/ui_state.json`: filtros e estado visual da interface.
+- `printh3d_data/config/session_state.json`: estado de sessão exportado.
 
 ## 5. Dependências externas
 
@@ -114,6 +129,12 @@ Observações de modelagem:
 1. Lê `sales` do mês para receita/lucro.
 2. Lê `expenses` do mês para gastos.
 3. Calcula resultado líquido e total a receber.
+
+### Sincronização de Pasta Raiz
+1. Usuário conecta a pasta via onboarding ou Configurações.
+2. Sistema cria/valida estrutura `printh3d_data/`.
+3. Alterações em stores disparam sincronização automática com debounce.
+4. Em falha operacional, ADMIN pode restaurar dados do espelho físico para IndexedDB.
 
 ## 7. Escalabilidade
 

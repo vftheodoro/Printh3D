@@ -7,6 +7,9 @@ const Database = (() => {
     const DB_NAME = 'printh3d_pro';
     const DB_VERSION = 4;
     let db = null;
+    let rootSyncSuspendCounter = 0;
+    let rootSyncTimer = null;
+    const ROOT_SYNC_DEBOUNCE_MS = 700;
 
     const STORES = {
         USERS: 'users',
@@ -21,6 +24,103 @@ const Database = (() => {
         EXPENSES: 'expenses',
         TRASH: 'trash'
     };
+
+    const JSON_BACKUP_STORES = [
+        STORES.USERS,
+        STORES.SETTINGS,
+        STORES.CATEGORIES,
+        STORES.PRODUCTS,
+        STORES.PROMOTIONS,
+        STORES.COUPONS,
+        STORES.SALES,
+        STORES.CLIENTS,
+        STORES.EXPENSES,
+        STORES.TRASH
+    ];
+
+    function isRootSyncEnabled() {
+        return rootSyncSuspendCounter <= 0;
+    }
+
+    function scheduleRootSync() {
+        if (!isRootSyncEnabled()) return;
+        if (typeof RootStorage === 'undefined' || !RootStorage?.isActive?.()) return;
+
+        if (rootSyncTimer) {
+            clearTimeout(rootSyncTimer);
+        }
+
+        rootSyncTimer = setTimeout(async () => {
+            try {
+                if (typeof App !== 'undefined' && typeof App.getCurrentUIState === 'function') {
+                    await RootStorage.syncFromDatabase({
+                        uiState: App.getCurrentUIState(),
+                        sessionState: {
+                            currentUser: (typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function')
+                                ? Auth.getCurrentUser()
+                                : null
+                        }
+                    });
+                } else {
+                    await RootStorage.syncFromDatabase();
+                }
+            } catch (err) {
+                console.error('[Database] Falha ao sincronizar pasta raiz:', err);
+            }
+        }, ROOT_SYNC_DEBOUNCE_MS);
+    }
+
+    async function withRootSyncSuspended(action) {
+        rootSyncSuspendCounter += 1;
+        try {
+            return await action();
+        } finally {
+            rootSyncSuspendCounter = Math.max(0, rootSyncSuspendCounter - 1);
+        }
+    }
+
+    async function getFullSnapshot() {
+        const stores = {};
+        for (const storeName of JSON_BACKUP_STORES) {
+            stores[storeName] = await getAll(storeName);
+        }
+        const productFiles = await getAll(STORES.PRODUCT_FILES);
+        return {
+            generated_at: new Date().toISOString(),
+            stores,
+            productFiles
+        };
+    }
+
+    async function restoreFromRootSnapshot(snapshot) {
+        if (!snapshot || typeof snapshot !== 'object') {
+            throw new Error('Snapshot de restauração inválido.');
+        }
+
+        const stores = snapshot.stores || {};
+        const productFiles = snapshot.productFiles || [];
+
+        await withRootSyncSuspended(async () => {
+            for (const storeName of JSON_BACKUP_STORES) {
+                await clearStore(storeName);
+            }
+            await clearStore(STORES.PRODUCT_FILES);
+
+            for (const storeName of JSON_BACKUP_STORES) {
+                const rows = Array.isArray(stores[storeName]) ? stores[storeName] : [];
+                for (const row of rows) {
+                    await put(storeName, row);
+                }
+            }
+
+            for (const row of productFiles) {
+                await put(STORES.PRODUCT_FILES, row);
+            }
+        });
+
+        scheduleRootSync();
+        return true;
+    }
 
     // ------------------------------------------
     // Inicializa IndexedDB e cria object stores
@@ -332,6 +432,7 @@ const Database = (() => {
             const request = store.add(data);
             request.onsuccess = () => {
                 data.id = request.result;
+                scheduleRootSync();
                 resolve(data);
             };
             request.onerror = (e) => reject(e.target.error);
@@ -342,7 +443,10 @@ const Database = (() => {
         return new Promise((resolve, reject) => {
             const store = getTransaction(storeName, 'readwrite');
             const request = store.put(data);
-            request.onsuccess = () => resolve(data);
+            request.onsuccess = () => {
+                scheduleRootSync();
+                resolve(data);
+            };
             request.onerror = (e) => reject(e.target.error);
         });
     }
@@ -376,7 +480,10 @@ const Database = (() => {
         return new Promise((resolve, reject) => {
             const store = getTransaction(storeName, 'readwrite');
             const request = store.delete(id);
-            request.onsuccess = () => resolve(true);
+            request.onsuccess = () => {
+                scheduleRootSync();
+                resolve(true);
+            };
             request.onerror = (e) => reject(e.target.error);
         });
     }
@@ -437,7 +544,10 @@ const Database = (() => {
         return new Promise((resolve, reject) => {
             const store = getTransaction(storeName, 'readwrite');
             const request = store.clear();
-            request.onsuccess = () => resolve();
+            request.onsuccess = () => {
+                scheduleRootSync();
+                resolve();
+            };
             request.onerror = (e) => reject(e.target.error);
         });
     }
@@ -667,8 +777,7 @@ const Database = (() => {
         const zip = new JSZip();
 
         // Export all stores as JSON (except files which are binary)
-        const storeNames = [STORES.USERS, STORES.SETTINGS, STORES.CATEGORIES,
-                   STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES, STORES.CLIENTS, STORES.EXPENSES, STORES.TRASH];
+        const storeNames = [...JSON_BACKUP_STORES];
 
         for (const name of storeNames) {
             const data = await getAll(name);
@@ -700,28 +809,20 @@ const Database = (() => {
     async function importFullBackup(file) {
         const zip = await JSZip.loadAsync(file);
 
-        const storeNames = [STORES.USERS, STORES.SETTINGS, STORES.CATEGORIES,
-                   STORES.PRODUCTS, STORES.PROMOTIONS, STORES.COUPONS, STORES.SALES, STORES.CLIENTS, STORES.EXPENSES, STORES.TRASH];
+        const storeNames = [...JSON_BACKUP_STORES];
 
-        // Clear all stores
-        for (const name of storeNames) {
-            await clearStore(name);
-        }
-        await clearStore(STORES.PRODUCT_FILES);
-
-        // Import JSON data
+        const stores = {};
         for (const name of storeNames) {
             const jsonFile = zip.file(`${name}.json`);
-            if (jsonFile) {
-                const text = await jsonFile.async('text');
-                const data = JSON.parse(text);
-                for (const row of data) {
-                    await put(name, row);
-                }
+            if (!jsonFile) {
+                stores[name] = [];
+                continue;
             }
+            const text = await jsonFile.async('text');
+            stores[name] = JSON.parse(text);
         }
 
-        // Import files
+        const productFiles = [];
         const metaFile = zip.file('product_files_meta.json');
         if (metaFile) {
             const metaText = await metaFile.async('text');
@@ -732,10 +833,12 @@ const Database = (() => {
                 const binFile = filesFolder.file(`${m.id}_${m.nome_arquivo}`);
                 if (binFile) {
                     const blob = await binFile.async('arraybuffer');
-                    await put(STORES.PRODUCT_FILES, { ...m, blob });
+                    productFiles.push({ ...m, blob });
                 }
             }
         }
+
+        await restoreFromRootSnapshot({ stores, productFiles });
 
         console.log('[Database] Backup importado com sucesso.');
     }
@@ -778,8 +881,12 @@ const Database = (() => {
     // API Pública
     return {
         STORES,
+        JSON_BACKUP_STORES,
         init,
         seedIfEmpty,
+        withRootSyncSuspended,
+        getFullSnapshot,
+        restoreFromRootSnapshot,
         // CRUD
         add,
         put,

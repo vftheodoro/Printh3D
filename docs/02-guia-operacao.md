@@ -5,6 +5,11 @@
 1. Acesse login.html.
 2. Informe email e senha.
 3. Clique em Entrar.
+4. Se for ADMIN e não houver Pasta Raiz conectada, o sistema abrirá o assistente inicial.
+
+No assistente inicial:
+- Sincronizar Pasta Existente: aponta para uma pasta que já contém `printh3d_data/` e restaura os dados.
+- Criar Pasta do Zero: cria `printh3d_data/` e grava o estado atual do sistema.
 
 Credencial padrão inicial:
 - admin@printh3d.com / admin123
@@ -127,3 +132,27 @@ Fluxo:
 - Use botão Importar Dados e selecione ZIP ou XLSX compatível.
 
 Recomendação: manter cópias em pasta local dedicada (ex.: backups/).
+
+## 12. Pasta Raiz (recuperação manual)
+
+Objetivo:
+- Manter uma cópia física completa para abrir manualmente na raiz em caso de falha do sistema.
+
+Onde configurar:
+- Sidebar (ADMIN): botão "Sincronizar Pasta Raiz".
+- Configurações (ADMIN):
+	- Conectar Pasta Raiz
+	- Sincronizar Agora
+	- Restaurar da Pasta
+
+Como funciona:
+1. Conecte a pasta desejada (o navegador solicitará permissão).
+2. O sistema cria/usa `printh3d_data/` com subpastas organizadas.
+3. Após alterações no sistema, a sincronização ocorre automaticamente.
+4. Para recuperação, use "Restaurar da Pasta".
+
+Estrutura gerada:
+- `printh3d_data/data`: JSONs com dados de vendas, clientes, gastos, usuários, configurações, etc.
+- `printh3d_data/files`: mídias e anexos separados por tipo.
+- `printh3d_data/config`: estado de filtros e visualizações.
+- `printh3d_data/manifest.json`: resumo da última sincronização.

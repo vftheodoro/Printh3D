@@ -17,10 +17,11 @@ A ordem correta de carregamento é crítica:
 6. promotions.js
 7. filemanager.js
 8. dashboard.js
-9. app.js
+9. root-storage.js
+10. app.js
 
 Observação:
-- Novas funcionalidades (clientes, gastos, lixeira) estão no fluxo já coberto por `database.js`, `storage.js` e `app.js`.
+- Novas funcionalidades (clientes, gastos, lixeira e Pasta Raiz) estão no fluxo coberto por `database.js`, `storage.js`, `root-storage.js` e `app.js`.
 
 ## 3. Ordem de scripts (login)
 
@@ -59,6 +60,12 @@ Passos recomendados:
 ## Dados sumiram
 - Confirmar navegador/perfil usado.
 - Restaurar via backup ZIP/XLSX.
+- Se houver Pasta Raiz conectada, usar "Restaurar da Pasta" em Configurações.
+
+## Onboarding da Pasta Raiz aparece sempre
+- Verificar se o navegador manteve permissão para a pasta selecionada.
+- Reautorizar a pasta pelo assistente inicial quando necessário.
+- Confirmar se `printh3d_data/` existe e se há permissão de leitura/escrita.
 
 ## Item excluído por engano
 - Acessar aba Lixeira.
@@ -69,6 +76,7 @@ Passos recomendados:
 - Validar CRUD de categorias, produtos, vendas, clientes, gastos, promoções e cupons.
 - Validar fluxo de lixeira (restaurar/excluir definitivo).
 - Testar backup/restore.
+- Testar conexão/sincronização/restauração de Pasta Raiz.
 - Confirmar .gitignore cobrindo arquivos de dados.
 - Confirmar bloqueio de segredos (`.env*`, chaves e certificados).
 - Rodar `git status` e revisar mudanças antes de commit.

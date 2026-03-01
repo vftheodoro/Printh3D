@@ -2,7 +2,11 @@
 
 ## 1. Onde os dados ficam
 
-Os dados operacionais ficam no IndexedDB do navegador, banco local chamado:
+Os dados operacionais ficam em duas camadas:
+1. IndexedDB do navegador (banco local chamado `printh3d_pro`).
+2. Espelho opcional em Pasta Raiz selecionada pelo ADMIN (`printh3d_data/`).
+
+Stores do IndexedDB:
 - printh3d_pro
 
 Stores principais:
@@ -18,17 +22,27 @@ Stores principais:
 - expenses
 - trash
 
+Espelho físico (`printh3d_data/`):
+- `data/*.json`: dados transacionais por store
+- `data/product_files_meta.json`: metadados dos anexos
+- `files/images|models_3d|documents|others`: arquivos binários separados por tipo
+- `config/ui_state.json`: filtros e visualização exportados
+- `config/session_state.json`: sessão exportada
+- `manifest.json`: resumo do snapshot
+
 ## 2. Privacidade e GitHub
 
 Por padrão, o IndexedDB não é versionado no Git.
 
 Risco real de vazamento para GitHub:
 - Exportações manuais de backup (ZIP/XLSX) salvas dentro da pasta do projeto.
+- Pasta `printh3d_data/` sincronizada dentro de diretório versionado.
 
 Mitigação aplicada:
 - .gitignore com bloqueio de padrões de backup/exportação.
 - .gitignore com bloqueio de arquivos de segredo (.env, .pem, .key, tokens).
 - exclusão lógica com retenção na lixeira por 30 dias (evita perda acidental).
+- documentação de operação orientando manter `printh3d_data/` fora de repositórios públicos.
 
 Dados sensíveis típicos neste contexto:
 - dados de clientes (nome, contato, cidade)
@@ -53,6 +67,7 @@ Boas práticas:
 - Não enviar backups por canais inseguros.
 - Criptografar arquivos de backup em ambientes sensíveis.
 - Evitar salvar backups dentro da pasta versionada do projeto.
+- Se usar Pasta Raiz, tratar `printh3d_data/` como dado operacional sensível.
 
 ## 5. Limpeza de arquivos já versionados
 
@@ -75,3 +90,9 @@ Para revisar antes de publicar:
 - Aplicar criptografia em repouso para dados sensíveis.
 - Registrar logs de auditoria e política de retenção.
 - Definir política explícita de descarte/anonimização de dados de clientes.
+
+## 7. Limitações de permissão local
+
+- O acesso à Pasta Raiz depende da permissão do navegador (File System Access API).
+- O sistema tenta reconectar automaticamente a pasta autorizada anteriormente.
+- Se a permissão expirar/revogar, o onboarding solicita nova escolha de pasta.

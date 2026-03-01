@@ -32,6 +32,7 @@ const App = (() => {
         setupUI();
         setupNavigation();
         setupGlobalListeners();
+        await initRootStorageStartupFlow();
         await navigate('dashboard');
         hideLoading();
 
@@ -138,6 +139,41 @@ const App = (() => {
             e.target.value = '';
         });
 
+        const btnRootConnect = document.getElementById('btn-root-connect');
+        if (btnRootConnect) {
+            btnRootConnect.addEventListener('click', async () => {
+                await connectRootStorage();
+            });
+        }
+
+        const btnRootSync = document.getElementById('btn-root-sync');
+        if (btnRootSync) {
+            btnRootSync.addEventListener('click', async () => {
+                await syncRootStorageNow();
+            });
+        }
+
+        const btnRootRestore = document.getElementById('btn-root-restore');
+        if (btnRootRestore) {
+            btnRootRestore.addEventListener('click', async () => {
+                await restoreRootStorage();
+            });
+        }
+
+        const btnRootAccess = document.getElementById('btn-root-access');
+        if (btnRootAccess) {
+            btnRootAccess.addEventListener('click', async () => {
+                await accessRootStorage();
+            });
+        }
+
+        const btnRootSidebar = document.getElementById('btn-root-sync-sidebar');
+        if (btnRootSidebar) {
+            btnRootSidebar.addEventListener('click', async () => {
+                await syncRootStorageNow();
+            });
+        }
+
         const toggleBtn = document.getElementById('sidebar-toggle');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', () => {
@@ -173,6 +209,90 @@ const App = (() => {
     function closeMobileSidebar() {
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebar-backdrop').classList.remove('active');
+    }
+
+    async function initRootStorageStartupFlow() {
+        if (typeof RootStorage === 'undefined') return;
+        if (!Auth.isAdmin()) return;
+
+        try {
+            await RootStorage.initFromSavedHandle();
+        } catch (_) {}
+
+        const status = RootStorage.getStatus();
+        if (!status.supported || status.active) return;
+
+        openRootStorageOnboardingModal();
+    }
+
+    function openRootStorageOnboardingModal() {
+        const html = `
+        <div class="card" style="border:none;box-shadow:none;padding:0;">
+            <p class="text-secondary" style="margin-bottom:0.75rem;">
+                Este sistema trabalha com duas camadas: operação no navegador e cópia física em pasta raiz para recuperação manual.
+            </p>
+            <ul class="text-secondary" style="padding-left:1rem;margin:0 0 1rem 0;display:grid;gap:0.35rem;">
+                <li>Dados ficam organizados em JSON na pasta <strong>printh3d_data/data</strong>.</li>
+                <li>Imagens e arquivos ficam separados por tipo em <strong>printh3d_data/files</strong>.</li>
+                <li>Configurações, filtros e visualizações ficam em <strong>printh3d_data/config</strong>.</li>
+                <li>Se o sistema falhar, você consegue recuperar tudo manualmente pela raiz.</li>
+            </ul>
+            <div class="form-actions" style="justify-content:flex-start;">
+                <button type="button" class="btn btn-secondary" onclick="App.chooseExistingRootFolder()">
+                    <i data-lucide="folder-open"></i> Sincronizar Pasta Existente
+                </button>
+                <button type="button" class="btn btn-primary" onclick="App.createNewRootFolder()">
+                    <i data-lucide="folder-plus"></i> Criar Pasta do Zero
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">
+                    Agora não
+                </button>
+            </div>
+        </div>`;
+
+        openModal('Configuração Inicial da Pasta Raiz', html);
+    }
+
+    async function chooseExistingRootFolder() {
+        if (!Auth.isAdmin()) return;
+        try {
+            if (typeof RootStorage === 'undefined') throw new Error('Módulo de pasta raiz não carregado.');
+
+            await RootStorage.connectDirectory({ createStructure: false });
+            const hasBackup = await RootStorage.hasBackupData();
+
+            if (hasBackup) {
+                await RootStorage.restoreToDatabase();
+                showToast('Pasta existente sincronizada e dados restaurados.', 'success');
+                await navigate(currentSection);
+            } else {
+                const ok = await confirmDialog('Pasta sem backup', 'Não foi encontrado backup existente nessa pasta. Deseja iniciar uma nova estrutura com os dados atuais do sistema?');
+                if (ok) {
+                    await syncRootStorageNow(true);
+                    showToast('Nova estrutura criada e sincronizada na pasta selecionada.', 'success');
+                }
+            }
+
+            closeModal();
+        } catch (err) {
+            showToast('Falha ao sincronizar pasta existente: ' + err.message, 'danger');
+        }
+        renderRootStorageStatus();
+    }
+
+    async function createNewRootFolder() {
+        if (!Auth.isAdmin()) return;
+        try {
+            if (typeof RootStorage === 'undefined') throw new Error('Módulo de pasta raiz não carregado.');
+
+            await RootStorage.connectDirectory();
+            await syncRootStorageNow(true);
+            showToast('Pasta raiz nova criada e sincronizada com sucesso.', 'success');
+            closeModal();
+        } catch (err) {
+            showToast('Falha ao criar pasta raiz: ' + err.message, 'danger');
+        }
+        renderRootStorageStatus();
     }
 
     // ==========================================
@@ -2474,6 +2594,174 @@ const App = (() => {
         setInputVal('cfg-consumo-w', s.consumo_maquina_w || 350);
         setInputVal('cfg-falha', s.percentual_falha);
         setInputVal('cfg-depreciacao', s.depreciacao_percentual);
+        renderRootStorageStatus();
+    }
+
+    function getCurrentUIState() {
+        return {
+            captured_at: new Date().toISOString(),
+            current_section: currentSection,
+            product_view_mode: productViewMode,
+            filters: {
+                products: {
+                    search: document.getElementById('product-search')?.value || '',
+                    category: document.getElementById('filter-category')?.value || '',
+                    status: document.getElementById('filter-status')?.value || '',
+                    sort: document.getElementById('filter-sort')?.value || ''
+                },
+                sales: {
+                    start: document.getElementById('filter-date-start')?.value || '',
+                    end: document.getElementById('filter-date-end')?.value || '',
+                    vendedor: document.getElementById('filter-vendedor')?.value || ''
+                },
+                expenses: {
+                    start: document.getElementById('expense-filter-start')?.value || '',
+                    end: document.getElementById('expense-filter-end')?.value || '',
+                    category: document.getElementById('expense-filter-category')?.value || '',
+                    payment: document.getElementById('expense-filter-payment')?.value || ''
+                },
+                clients: {
+                    search: document.getElementById('client-search')?.value || '',
+                    ranking: document.getElementById('client-filter-ranking')?.value || '',
+                    debt: document.getElementById('client-filter-debt')?.value || '',
+                    payment: document.getElementById('client-filter-payment')?.value || ''
+                }
+            }
+        };
+    }
+
+    function renderRootStorageStatus() {
+        const statusEl = document.getElementById('root-storage-status');
+        if (!statusEl) return;
+        if (typeof RootStorage === 'undefined') {
+            statusEl.textContent = 'Módulo de Pasta Raiz indisponível.';
+            return;
+        }
+
+        const status = RootStorage.getStatus();
+        if (!status.supported) {
+            statusEl.textContent = 'Navegador sem suporte a acesso de pasta local (use Edge/Chrome recente).';
+            return;
+        }
+
+        if (!status.active) {
+            statusEl.textContent = 'Nenhuma pasta conectada.';
+            return;
+        }
+
+        const syncLabel = status.lastSyncAt
+            ? `Última sincronização: ${new Date(status.lastSyncAt).toLocaleString('pt-BR')}`
+            : 'Ainda sem sincronização.';
+        statusEl.textContent = `Pasta conectada: ${status.folderName}. ${syncLabel}`;
+    }
+
+    async function connectRootStorage() {
+        if (!Auth.isAdmin()) return;
+        try {
+            if (typeof RootStorage === 'undefined') throw new Error('Módulo de pasta raiz não carregado.');
+            await RootStorage.connectDirectory();
+            await syncRootStorageNow(true);
+            showToast('Pasta raiz conectada e migração inicial concluída.', 'success');
+            closeModal();
+        } catch (err) {
+            showToast('Falha ao conectar pasta raiz: ' + err.message, 'danger');
+        }
+        renderRootStorageStatus();
+    }
+
+    async function syncRootStorageNow(silent = false) {
+        if (!Auth.isAdmin()) return;
+        try {
+            if (typeof RootStorage === 'undefined') throw new Error('Módulo de pasta raiz não carregado.');
+            await RootStorage.syncFromDatabase({
+                uiState: getCurrentUIState(),
+                sessionState: {
+                    currentUser: Auth.getCurrentUser() || null
+                }
+            });
+            if (!silent) showToast('Sincronização concluída na pasta raiz.', 'success');
+        } catch (err) {
+            if (!silent) showToast('Falha na sincronização: ' + err.message, 'danger');
+            if (silent) throw err;
+        }
+        renderRootStorageStatus();
+    }
+
+    async function restoreRootStorage() {
+        if (!Auth.isAdmin()) return;
+        try {
+            if (typeof RootStorage === 'undefined') throw new Error('Módulo de pasta raiz não carregado.');
+            const ok = await confirmDialog('Restaurar da Pasta Raiz', 'Isso vai sobrescrever o banco atual com os arquivos da pasta raiz conectada. Deseja continuar?');
+            if (!ok) return;
+
+            await RootStorage.restoreToDatabase();
+            showToast('Banco restaurado a partir da pasta raiz.', 'success');
+            await navigate(currentSection);
+        } catch (err) {
+            showToast('Falha ao restaurar: ' + err.message, 'danger');
+        }
+        renderRootStorageStatus();
+    }
+
+    async function accessRootStorage() {
+        if (!Auth.isAdmin()) return;
+        try {
+            if (typeof RootStorage === 'undefined') throw new Error('Módulo de pasta raiz não carregado.');
+
+            if (!RootStorage.isActive()) {
+                const ok = await confirmDialog('Pasta Raiz não conectada', 'Para acessar a estrutura da Pasta Raiz, conecte uma pasta agora. Deseja continuar?');
+                if (!ok) return;
+                await connectRootStorage();
+                if (!RootStorage.isActive()) return;
+            }
+
+            const overview = await RootStorage.getRootOverview();
+            const manifestDate = overview.manifest?.generated_at
+                ? new Date(overview.manifest.generated_at).toLocaleString('pt-BR')
+                : 'Não encontrado';
+            const manifestVersion = overview.manifest?.version ?? '—';
+            const treeHtml = renderRootTreeHtml(overview.tree || []);
+
+            const html = `
+            <div class="card" style="border:none;box-shadow:none;padding:0;">
+                <p class="text-secondary" style="margin-bottom:0.6rem;">
+                    Pasta conectada: <strong>${escapeHtml(overview.folderName)}</strong>
+                </p>
+                <p class="text-secondary" style="margin-bottom:0.8rem;font-size:0.85rem;">
+                    Estrutura exibida: <strong>${escapeHtml(overview.dataFolder)}</strong> | Versão Manifesto: <strong>${escapeHtml(String(manifestVersion))}</strong> | Última sincronização: <strong>${escapeHtml(manifestDate)}</strong>
+                </p>
+                <div style="border:1px solid var(--color-border); border-radius:12px; padding:0.75rem; max-height:320px; overflow:auto; background:var(--color-bg-secondary);">
+                    ${treeHtml}
+                </div>
+                <div class="form-actions" style="justify-content:flex-start; margin-top:0.8rem;">
+                    <button type="button" class="btn btn-primary" onclick="App.syncRootStorageNow()">
+                        <i data-lucide="refresh-cw"></i> Sincronizar Agora
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="App.restoreRootStorage()">
+                        <i data-lucide="rotate-ccw"></i> Restaurar da Pasta
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Fechar</button>
+                </div>
+            </div>`;
+
+            openModal('Acessar Pasta Raiz', html, true);
+        } catch (err) {
+            showToast('Falha ao acessar Pasta Raiz: ' + err.message, 'danger');
+        }
+    }
+
+    function renderRootTreeHtml(items, level = 0) {
+        if (!items || items.length === 0) {
+            return '<p class="text-secondary" style="margin:0;">Nenhum arquivo encontrado.</p>';
+        }
+
+        return `<ul style="list-style:none; margin:${level === 0 ? 0 : '0.35rem 0 0.15rem 0'}; padding-left:${level === 0 ? 0 : '1rem'}; display:grid; gap:0.3rem;">${items.map(item => {
+            const icon = item.kind === 'directory' ? 'folder' : 'file';
+            const children = item.kind === 'directory' && item.children && item.children.length > 0
+                ? renderRootTreeHtml(item.children, level + 1)
+                : '';
+            return `<li><div style="display:flex;align-items:center;gap:0.4rem;"><i data-lucide="${icon}"></i><span>${escapeHtml(item.name)}</span></div>${children}</li>`;
+        }).join('')}</ul>`;
     }
 
     function saveSettings() {
@@ -2859,7 +3147,9 @@ const App = (() => {
         // Calculator
         calcAdvanced, calcResetForm, calcSaveAsProduct, calcRegisterSaleFromCalculator,
         // Settings & Users
-        saveSettings, openUserModal, saveUser, deleteUser
+        saveSettings, openUserModal, saveUser, deleteUser,
+        connectRootStorage, syncRootStorageNow, restoreRootStorage, getCurrentUIState,
+        chooseExistingRootFolder, createNewRootFolder, accessRootStorage
     };
 })();
 

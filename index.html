@@ -112,6 +112,9 @@
                 <button class="btn btn-secondary" id="btn-export-backup">
                     <i data-lucide="download"></i> Backup Completo (ZIP)
                 </button>
+                <button class="btn btn-secondary admin-only" id="btn-root-sync-sidebar">
+                    <i data-lucide="refresh-cw"></i> Sincronizar Pasta Raiz
+                </button>
                 <button class="btn btn-secondary" id="btn-export-excel">
                     <i data-lucide="file-spreadsheet"></i> Exportar Excel
                 </button>
@@ -870,6 +873,38 @@
                             <i data-lucide="save"></i> Salvar e Recalcular Produtos
                         </button>
                     </div>
+
+                    <div class="card" style="margin-top:1rem;">
+                        <h3><i data-lucide="database"></i> Banco em Pasta Raiz (Recuperação Manual)</h3>
+                        <p class="text-secondary mb-2" style="font-size: 0.85rem;">
+                            Conecte a raiz do projeto para manter uma cópia completa em arquivos JSON + pastas de mídia.
+                            Isso inclui dados de vendas, clientes, gastos, usuários/senhas (hash), configurações e estado de filtros/visualização.
+                        </p>
+                        <div id="root-storage-status" class="text-secondary" style="margin-bottom:0.75rem; font-size:0.85rem;">
+                            Nenhuma pasta conectada.
+                        </div>
+                        <div class="form-actions" style="justify-content:flex-start;">
+                            <button class="btn btn-secondary" id="btn-root-connect">
+                                <i data-lucide="folder-open"></i> Conectar Pasta Raiz
+                            </button>
+                            <button class="btn btn-primary" id="btn-root-sync">
+                                <i data-lucide="refresh-cw"></i> Sincronizar Agora
+                            </button>
+                            <button class="btn btn-danger" id="btn-root-restore">
+                                <i data-lucide="rotate-ccw"></i> Restaurar da Pasta
+                            </button>
+                        </div>
+
+                        <div style="margin-top:0.9rem; padding-top:0.9rem; border-top:1px solid var(--color-border);">
+                            <h4 style="margin-bottom:0.45rem;"><i data-lucide="folder-search"></i> Acessar Pasta Raiz</h4>
+                            <p class="text-secondary" style="font-size:0.85rem; margin-bottom:0.6rem;">
+                                Visualize a estrutura atual da Pasta Raiz conectada para localizar manualmente seus arquivos.
+                            </p>
+                            <button class="btn btn-secondary" id="btn-root-access">
+                                <i data-lucide="folder"></i> Acessar Pasta Raiz
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ===================================
@@ -950,6 +985,7 @@
     <script src="js/promotions.js"></script>
     <script src="js/filemanager.js"></script>
     <script src="js/dashboard.js"></script>
+    <script src="js/root-storage.js"></script>
     <script src="js/app.js"></script>
 
     <script>
