@@ -607,6 +607,7 @@ const Database = (() => {
             products = products.filter(p => {
                 return (p.nome && p.nome.toLowerCase().includes(q)) ||
                        (p.codigo_sku && p.codigo_sku.toLowerCase().includes(q)) ||
+                       (p.variation_label && p.variation_label.toLowerCase().includes(q)) ||
                        (p.descricao && p.descricao.toLowerCase().includes(q)) ||
                        (p.tags && p.tags.some(t => t.toLowerCase().includes(q))) ||
                        (p.material && p.material.toLowerCase().includes(q));
@@ -669,6 +670,19 @@ const Database = (() => {
         return await getByIndex(STORES.PRODUCT_FILES, 'product_id', productId);
     }
 
+    async function resolveMediaOwnerProductId(productId) {
+        const product = await getById(STORES.PRODUCTS, productId);
+        if (product && product.is_variation === true && product.parent_product_id) {
+            return product.parent_product_id;
+        }
+        return productId;
+    }
+
+    async function getProductFilesShared(productId) {
+        const ownerId = await resolveMediaOwnerProductId(productId);
+        return await getProductFiles(ownerId);
+    }
+
     async function addProductFile(productId, file) {
         const arrayBuffer = await file.arrayBuffer();
         const fileData = {
@@ -699,7 +713,9 @@ const Database = (() => {
         if (!product) throw new Error('Produto não encontrado');
 
         const category = product.category_id ? await getById(STORES.CATEGORIES, product.category_id) : null;
-        const files = await getProductFiles(productId);
+        const ownerId = await resolveMediaOwnerProductId(productId);
+        const ownerProduct = await getById(STORES.PRODUCTS, ownerId);
+        const files = await getProductFiles(ownerId);
         const promo = await getActivePromotion(productId);
 
         const zip = new JSZip();
@@ -722,6 +738,12 @@ const Database = (() => {
         info += `Resolução camada: ${product.resolucao_camada}mm\n`;
         info += `Custo total: R$ ${(product.custo_total || 0).toFixed(2)}\n`;
         info += `Preço venda: R$ ${(product.preco_venda || 0).toFixed(2)}\n`;
+        if (product.is_variation) {
+            info += `Tipo: Variação\n`;
+            info += `Produto base: ${ownerProduct?.nome || '—'} (${ownerProduct?.codigo_sku || '—'})\n`;
+            info += `Rótulo da variação: ${product.variation_label || '—'}\n`;
+            info += `Arquivos compartilhados: Sim\n`;
+        }
         if (promo) {
             info += `\n--- PROMOÇÃO ATIVA ---\n`;
             info += `Tipo: ${promo.tipo_desconto === 'percentual' ? 'Percentual' : 'Valor Fixo'}\n`;
@@ -902,6 +924,8 @@ const Database = (() => {
         searchProducts,
         getActivePromotion,
         getProductFiles,
+        getProductFilesShared,
+        resolveMediaOwnerProductId,
         addProductFile,
         // Trash
         addToTrash,

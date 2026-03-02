@@ -17,8 +17,14 @@ const FileManager = (() => {
         return [...ACCEPTED_TYPES.image, ...ACCEPTED_TYPES.model3d, ...ACCEPTED_TYPES.document].join(',');
     }
 
+    async function resolveMediaOwner(productId) {
+        const ownerId = await Database.resolveMediaOwnerProductId(productId);
+        const ownerProduct = await Database.getById(Database.STORES.PRODUCTS, ownerId);
+        return { ownerId, ownerProduct };
+    }
+
     async function getProductFiles(productId) {
-        return await Database.getProductFiles(productId);
+        return await Database.getProductFilesShared(productId);
     }
 
     async function addFile(productId, file) {
@@ -34,7 +40,8 @@ const FileManager = (() => {
             throw new Error(`Extensão "${ext}" não suportada.`);
         }
 
-        return await Database.addProductFile(productId, file);
+        const { ownerId } = await resolveMediaOwner(productId);
+        return await Database.addProductFile(ownerId, file);
     }
 
     async function addMultipleFiles(productId, files) {
@@ -95,12 +102,14 @@ const FileManager = (() => {
 
     async function getProductCoverUrl(product) {
         if (!product || !product.id) return null;
+        const { ownerProduct } = await resolveMediaOwner(product.id);
         const files = await getProductFiles(product.id);
         if (!files || files.length === 0) return null;
 
         let coverImage = null;
-        if (product.cover_file_id) {
-            coverImage = files.find(f => f.id === product.cover_file_id && f.tipo === 'image');
+        const coverFileId = ownerProduct?.cover_file_id || product.cover_file_id;
+        if (coverFileId) {
+            coverImage = files.find(f => f.id === coverFileId && f.tipo === 'image');
         }
         if (!coverImage) {
             coverImage = files.find(f => f.tipo === 'image');

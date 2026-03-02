@@ -306,13 +306,18 @@ const App = (() => {
     function getProductSearchSuggestions(query) {
         const products = Storage.getSheet('PRODUCTS') || [];
         const categories = Storage.getSheet('CATEGORIES') || [];
+        const productsById = new Map(products.map(p => [p.id, p]));
         const normQuery = normalizeText(query);
 
         const scored = products.map(p => {
             const categoryName = categories.find(c => c.id === p.category_id)?.nome || 'Sem categoria';
+            const parentName = p.parent_product_id ? (productsById.get(p.parent_product_id)?.nome || '') : '';
+            const variationLabel = p.variation_label || '';
             const fields = [
                 p.nome,
                 p.codigo_sku,
+                variationLabel,
+                parentName,
                 p.descricao,
                 p.material,
                 p.cor,
@@ -320,10 +325,13 @@ const App = (() => {
                 Array.isArray(p.tags) ? p.tags.join(' ') : ''
             ];
             const bestScore = Math.max(...fields.map(f => getSuggestionScore(normQuery, f)));
+            const label = p.is_variation
+                ? `${p.nome || 'Produto'} • ${variationLabel || 'Variação'}`
+                : (p.nome || 'Produto');
             return {
                 score: bestScore,
-                label: p.nome || 'Produto',
-                value: p.nome || '',
+                label,
+                value: label,
                 meta: `${p.codigo_sku || 'Sem SKU'} • ${categoryName}`
             };
         }).filter(item => item.score > 0);
@@ -793,6 +801,25 @@ const App = (() => {
         });
     }
 
+    function getProductVariationMeta(product, productById = new Map()) {
+        const isVariation = product?.is_variation === true;
+        const variationLabel = String(product?.variation_label || '').trim();
+        const parentProduct = isVariation && product?.parent_product_id
+            ? productById.get(product.parent_product_id)
+            : null;
+        const parentName = parentProduct?.nome || '';
+        const displayName = isVariation
+            ? `${product?.nome || 'Produto'} • ${variationLabel || 'Variação'}`
+            : (product?.nome || 'Produto');
+
+        return {
+            isVariation,
+            variationLabel,
+            parentName,
+            displayName
+        };
+    }
+
     async function loadProductsList() {
         const query = document.getElementById('product-search')?.value || '';
         const categoryId = document.getElementById('filter-category')?.value;
@@ -804,6 +831,8 @@ const App = (() => {
         if (status) filters.status = status;
 
         const products = await Database.searchProducts(query, filters);
+        const allProducts = await Database.getAll(Database.STORES.PRODUCTS);
+        const productById = new Map(allProducts.map(p => [p.id, p]));
         const promotions = await Promotions.getAllPromotions();
         const now = new Date().toISOString();
 
@@ -814,17 +843,22 @@ const App = (() => {
                 tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted" style="padding:2.5rem;"><div class="empty-state"><div class="empty-icon"><i data-lucide="package"></i></div><p>Nenhum produto encontrado.</p></div></td></tr>`;
             } else {
                 tbody.innerHTML = products.map(p => {
+                    const variationMeta = getProductVariationMeta(p, productById);
                     const margem = p.preco_venda > 0 ? ((p.preco_venda - p.custo_total) / p.preco_venda * 100) : 0;
                     const margemClass = margem < 20 ? 'text-danger' : 'text-success';
                     const promo = promotions.find(pr => pr.product_id === p.id && pr.ativo && (!pr.data_fim || pr.data_fim >= now));
                     const promoHtml = promo ? `<span class="badge badge-warning">${promo.tipo_desconto === 'percentual' ? promo.valor_desconto + '%' : 'R$' + promo.valor_desconto}</span>` : '<span class="text-muted">—</span>';
                     const stockClass = (p.estoque_minimo > 0 && p.quantidade_estoque <= p.estoque_minimo) ? 'text-danger' : '';
                     const statusBadge = p.ativo !== false ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-secondary">Inativo</span>';
+                    const variationBadge = variationMeta.isVariation ? '<span class="badge badge-info" style="margin-left:0.4rem;">Variação</span>' : '';
+                    const variationLine = variationMeta.isVariation
+                        ? `<div class="text-muted" style="font-size:0.75rem;">Base: ${escapeHtml(variationMeta.parentName || '—')} • ${escapeHtml(variationMeta.variationLabel || 'Sem rótulo')}</div>`
+                        : '';
 
                     return `<tr onclick="App.openProductSummary(${p.id})" style="cursor:pointer;" title="Clique para ver o resumo do produto">
                         <td><div class="product-thumb" data-product-id="${p.id}"><i data-lucide="image"></i></div></td>
                         <td><code>${escapeHtml(p.codigo_sku || '—')}</code></td>
-                        <td><strong>${escapeHtml(p.nome)}</strong></td>
+                        <td><strong>${escapeHtml(p.nome)}${variationBadge}</strong>${variationLine}</td>
                         <td><span class="badge" style="background:${p._category_cor || '#666'}20;color:${p._category_cor || '#666'};border:1px solid ${p._category_cor || '#666'}40">${escapeHtml(p._category_nome || '—')}</span></td>
                         <td>${fmtC(p.custo_total)}</td>
                         <td>${fmtC(p.preco_venda)}</td>
@@ -851,13 +885,14 @@ const App = (() => {
                 gridEl.innerHTML = `<div class="empty-state"><p>Nenhum produto encontrado.</p></div>`;
             } else {
                 gridEl.innerHTML = products.map(p => {
+                    const variationMeta = getProductVariationMeta(p, productById);
                     const promo = promotions.find(pr => pr.product_id === p.id && pr.ativo && (!pr.data_fim || pr.data_fim >= now));
                     return `
                     <div class="product-card" onclick="App.openProductSummary(${p.id})">
                         <div class="product-card-thumb" data-product-id="${p.id}"><i data-lucide="image"></i></div>
                         <div class="product-card-body">
                             <code class="text-muted">${escapeHtml(p.codigo_sku || '')}</code>
-                            <h4>${escapeHtml(p.nome)}</h4>
+                            <h4>${escapeHtml(variationMeta.displayName)}</h4>
                             <span class="badge" style="background:${p._category_cor || '#666'}20;color:${p._category_cor || '#666'}">${escapeHtml(p._category_nome || '—')}</span>
                             <div class="product-card-price">
                                 ${promo ? `<span class="price-promo">${fmtC(promo.preco_promocional)}</span><span class="price-original">${fmtC(p.preco_venda)}</span>` : `<span>${fmtC(p.preco_venda)}</span>`}
@@ -892,11 +927,19 @@ const App = (() => {
             return;
         }
 
-        const [category, promo, files] = await Promise.all([
+        const [category, promo, files, allProducts, mediaOwnerId] = await Promise.all([
             product.category_id ? Categories.getById(product.category_id) : Promise.resolve(null),
             Promotions.getActivePromotion(id),
-            FileManager.getProductFiles(id)
+            FileManager.getProductFiles(id),
+            Database.getAll(Database.STORES.PRODUCTS),
+            Database.resolveMediaOwnerProductId(id)
         ]);
+        const mediaOwnerProduct = allProducts.find(p => Number(p.id) === Number(mediaOwnerId)) || product;
+        const parentProduct = product.parent_product_id ? allProducts.find(p => p.id === product.parent_product_id) : null;
+        const variations = allProducts.filter(p => p.parent_product_id === product.id);
+        const siblingVariations = product.is_variation && parentProduct
+            ? allProducts.filter(p => p.parent_product_id === parentProduct.id && p.id !== product.id)
+            : [];
 
         const dim = product.dimensoes || {};
         const social = product.descricoes_social || {};
@@ -936,7 +979,7 @@ const App = (() => {
                     const isImage = f.tipo === 'image';
                     const icon = FileManager.getFileIcon(f.tipo);
                     const typeLabel = fileTypeLabel[f.tipo] || 'Arquivo';
-                    const isCover = Number(product.cover_file_id) === Number(f.id);
+                    const isCover = Number(mediaOwnerProduct?.cover_file_id || product.cover_file_id) === Number(f.id);
                     return `
                     <div class="file-item">
                         <div class="file-preview ${isImage ? 'file-preview-image' : ''}">
@@ -946,7 +989,7 @@ const App = (() => {
                         </div>
                         <div class="file-info">
                             <span class="file-name" title="${escapeHtml(f.nome_arquivo || '')}">${escapeHtml(f.nome_arquivo || 'Arquivo')}</span>
-                            <span class="file-size">${typeLabel} • ${FileManager.formatFileSize(f.tamanho_bytes || 0)} ${isCover ? '• Capa' : ''}</span>
+                            <span class="file-size">${typeLabel} • ${FileManager.formatFileSize(f.tamanho_bytes || 0)} ${isCover ? '• Capa' : ''}${product.is_variation ? ' • Compartilhado' : ''}</span>
                         </div>
                         <div class="file-actions">
                             ${isImage ? `<button type="button" class="btn btn-sm ${isCover ? 'btn-primary' : 'btn-secondary'}" onclick="App.setProductCover(${product.id}, ${f.id})" title="${isCover ? 'Imagem de capa atual' : 'Definir como capa'}"><i data-lucide="star"></i> ${isCover ? 'Capa' : 'Definir capa'}</button>` : ''}
@@ -980,7 +1023,24 @@ const App = (() => {
                     <label>Categoria</label>
                     <p>${category ? `<span class="badge" style="background:${category.cor || '#666'}20;color:${category.cor || '#666'};border:1px solid ${category.cor || '#666'}40">${escapeHtml(category.nome)}</span>` : '—'}</p>
                 </div>
+                <div class="form-group">
+                    <label>Tipo</label>
+                    <p>${product.is_variation ? '<span class="badge badge-info">Variação</span>' : '<span class="badge badge-secondary">Produto Base</span>'}</p>
+                </div>
             </div>
+
+            ${product.is_variation ? `
+            <div class="form-grid">
+                <div class="form-group"><label>Produto Base</label><p>${escapeHtml(parentProduct?.nome || '—')}</p></div>
+                <div class="form-group"><label>Rótulo da Variação</label><p>${escapeHtml(product.variation_label || '—')}</p></div>
+                <div class="form-group"><label>Outras variações da base</label><p>${siblingVariations.length ? siblingVariations.map(v => `<span class="badge badge-secondary">${escapeHtml(v.variation_label || v.nome)}</span>`).join(' ') : '—'}</p></div>
+            </div>
+            ` : `
+            <div class="form-group">
+                <label>Variações deste produto</label>
+                <p>${variations.length ? variations.map(v => `<span class="badge badge-info">${escapeHtml(v.variation_label || v.nome)} (${escapeHtml(v.codigo_sku || '—')})</span>`).join(' ') : 'Nenhuma variação cadastrada.'}</p>
+            </div>
+            `}
 
             <div class="form-group">
                 <label>Descrição</label>
@@ -1031,6 +1091,13 @@ const App = (() => {
                 <div class="form-group"><label>Atualizado em</label><p>${fmtDateTime(product.updated_at || product.created_at)}</p></div>
             </div>
 
+            ${product.is_variation ? `
+            <div class="form-group">
+                <label>Mídia</label>
+                <p class="text-muted">Fotos/arquivos compartilhados com o produto base <strong>${escapeHtml(mediaOwnerProduct?.nome || '—')}</strong>.</p>
+            </div>
+            ` : ''}
+
             <div class="form-group">
                 <label>Arquivos para Visualização / Download</label>
                 ${filesListHtml}
@@ -1044,6 +1111,7 @@ const App = (() => {
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Fechar</button>
                 <button type="button" class="btn btn-secondary" onclick="App.duplicateProduct(${product.id})"><i data-lucide="copy"></i> Duplicar Produto</button>
+                <button type="button" class="btn btn-secondary" onclick="App.openCreateVariationModal(${product.parent_product_id || product.id})"><i data-lucide="git-branch-plus"></i> Adicionar Variação</button>
                 <button type="button" class="btn btn-secondary" onclick="App.openProductInRootFolder(${product.id})"><i data-lucide="folder-open"></i> Abrir na Pasta Raiz</button>
                 <button type="button" class="btn btn-secondary" onclick="App.downloadProductZip(${product.id})"><i data-lucide="archive"></i> Exportar ZIP</button>
                 <button type="button" class="btn btn-primary" onclick="App.openProductModal(${product.id})"><i data-lucide="pencil"></i> Editar Produto</button>
@@ -1084,23 +1152,50 @@ const App = (() => {
     // ------------------------------------------
     // Product Modal with Tabs
     // ------------------------------------------
-    async function openProductModal(id) {
+    async function openProductModal(id, prefill = null) {
         editingProductId = id || null;
         const product = id ? await Database.getById(Database.STORES.PRODUCTS, id) : null;
+        const variationBaseId = (!id && prefill && prefill.variationBaseId)
+            ? parseInt(prefill.variationBaseId)
+            : null;
+        const variationBaseProduct = variationBaseId
+            ? await Database.getById(Database.STORES.PRODUCTS, variationBaseId)
+            : null;
+        const allProducts = await Database.getAll(Database.STORES.PRODUCTS);
         const categories = await Categories.getAll();
-        const title = product ? 'Editar Produto' : 'Novo Produto';
+        const title = product
+            ? 'Editar Produto'
+            : (variationBaseProduct ? 'Nova Variação de Produto' : 'Novo Produto');
+
+        let selectedDefaultCategoryId = categories.length > 0 ? categories[0].id : null;
+        if (!product && variationBaseProduct?.category_id) {
+            selectedDefaultCategoryId = variationBaseProduct.category_id;
+        }
 
         let defaultSku = '';
-        const firstCatId = categories.length > 0 ? categories[0].id : null;
-        if (!product && firstCatId) {
-            defaultSku = await Database.getNextSKU(firstCatId);
+        if (!product && variationBaseProduct) {
+            defaultSku = await getUniqueVariationSku(variationBaseProduct.codigo_sku || 'PROD');
+        } else if (!product && selectedDefaultCategoryId) {
+            defaultSku = await Database.getNextSKU(selectedDefaultCategoryId);
         }
 
         const catOptions = categories.map(c =>
-            `<option value="${c.id}" ${product && product.category_id === c.id ? 'selected' : (!product && c.id === firstCatId ? 'selected' : '')}>${escapeHtml(c.nome)} (${c.prefixo})</option>`
+            `<option value="${c.id}" ${product && product.category_id === c.id ? 'selected' : (!product && c.id === selectedDefaultCategoryId ? 'selected' : '')}>${escapeHtml(c.nome)} (${c.prefixo})</option>`
         ).join('');
 
-        const p = product || {};
+        const p = product || (variationBaseProduct ? {
+            ...variationBaseProduct,
+            is_variation: true,
+            parent_product_id: variationBaseProduct.id,
+            variation_label: '',
+            codigo_sku: defaultSku,
+            cover_file_id: null
+        } : {});
+        const baseProducts = allProducts.filter(bp => bp.id !== (product?.id || null) && bp.is_variation !== true);
+        const variationParentOptions = baseProducts.map(bp =>
+            `<option value="${bp.id}" ${Number(p.parent_product_id) === Number(bp.id) ? 'selected' : ''}>${escapeHtml(bp.nome)} (${escapeHtml(bp.codigo_sku || '—')})</option>`
+        ).join('');
+        const variationBaseTargetId = product ? (product.parent_product_id || product.id) : (variationBaseProduct?.id || null);
         const dim = p.dimensoes || {};
         const social = p.descricoes_social || {};
         const socialGeral = social.geral || social.instagram || social.facebook || social.whatsapp || social.tiktok || '';
@@ -1131,6 +1226,26 @@ const App = (() => {
                 <div class="form-group">
                     <label>Nome do Produto</label>
                     <input type="text" id="prod-nome" value="${product ? escapeHtml(p.nome) : ''}" required placeholder="Ex: Vaso Decorativo Espiral">
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;">
+                    <input type="checkbox" id="prod-is-variation" ${p.is_variation ? 'checked' : ''} onchange="App.toggleVariationFields()">
+                    <label for="prod-is-variation" style="margin:0;cursor:pointer;">Este item é uma variação de um produto base</label>
+                </div>
+                <div id="variation-fields" class="${p.is_variation ? '' : 'hidden'}">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Produto Base</label>
+                            <select id="prod-parent-product" onchange="App.onVariationParentChange()">
+                                <option value="">— Selecione o produto base —</option>
+                                ${variationParentOptions}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Rótulo da Variação</label>
+                            <input type="text" id="prod-variation-label" value="${escapeHtml(p.variation_label || '')}" placeholder="Ex: Premium, Detalhes metálicos, Edição Luxo">
+                            <small>Use um nome curto para diferenciar esta versão do produto base.</small>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Descrição</label>
@@ -1227,6 +1342,7 @@ const App = (() => {
             ${id ? `
             <!-- TAB: Arquivos -->
             <div class="modal-tab-content" id="tab-files">
+                ${p.is_variation ? `<p class="text-muted" style="font-size:0.82rem;margin-bottom:0.75rem;">Arquivos desta variação são compartilhados com o produto base. Uploads e capa atualizam ambos.</p>` : ''}
                 ${FileManager.renderUploadZone(id)}
                 <div id="file-gallery-container"></div>
             </div>
@@ -1244,6 +1360,7 @@ const App = (() => {
 
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Cancelar</button>
+                ${variationBaseTargetId ? `<button type="button" class="btn btn-secondary" onclick="App.openCreateVariationModal(${variationBaseTargetId})"><i data-lucide="git-branch-plus"></i> Adicionar Variação</button>` : ''}
                 <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> ${product ? 'Atualizar' : 'Salvar Produto'}</button>
             </div>
         </form>`;
@@ -1254,6 +1371,7 @@ const App = (() => {
         setupCharCounter('prod-social-geral', 'count-geral');
 
         // If editing, show calc preview and load files
+        toggleVariationFields();
         if (product) {
             setTimeout(() => calcProductPreview(), 50);
             if (id) await refreshProductFiles(id);
@@ -1284,6 +1402,39 @@ const App = (() => {
             const sku = await Database.getNextSKU(catId);
             document.getElementById('prod-sku').value = sku;
         } catch (e) { /* ignore */ }
+    }
+
+    function toggleVariationFields() {
+        const isVariation = document.getElementById('prod-is-variation')?.checked === true;
+        const wrapper = document.getElementById('variation-fields');
+        const parentSelect = document.getElementById('prod-parent-product');
+        const variationLabel = document.getElementById('prod-variation-label');
+        if (wrapper) wrapper.classList.toggle('hidden', !isVariation);
+        if (parentSelect) parentSelect.required = isVariation;
+        if (variationLabel) variationLabel.required = isVariation;
+    }
+
+    async function onVariationParentChange() {
+        const isVariation = document.getElementById('prod-is-variation')?.checked === true;
+        if (!isVariation) return;
+
+        const parentId = parseInt(document.getElementById('prod-parent-product')?.value);
+        if (!parentId) return;
+
+        const parent = await Database.getById(Database.STORES.PRODUCTS, parentId);
+        if (!parent) return;
+
+        const categorySelect = document.getElementById('prod-category');
+        if (categorySelect && parent.category_id) {
+            categorySelect.value = String(parent.category_id);
+        }
+
+        if (!editingProductId) {
+            const skuInput = document.getElementById('prod-sku');
+            if (skuInput) {
+                skuInput.value = await getUniqueVariationSku(parent.codigo_sku || 'PROD');
+            }
+        }
     }
 
     function calcProductPreview() {
@@ -1319,11 +1470,27 @@ const App = (() => {
         const tempo_h = parseFloat(document.getElementById('prod-tempo')?.value);
         const category_id = parseInt(document.getElementById('prod-category')?.value);
         const sku = document.getElementById('prod-sku')?.value.trim().toUpperCase();
+        const isVariation = document.getElementById('prod-is-variation')?.checked === true;
+        const variationParentId = parseInt(document.getElementById('prod-parent-product')?.value) || null;
+        const variationLabel = document.getElementById('prod-variation-label')?.value.trim() || '';
 
         if (!nome) { showToast('Informe o nome do produto.', 'warning'); return; }
         if (!peso_g || peso_g <= 0) { showToast('Informe um peso válido.', 'warning'); return; }
         if (!tempo_h || tempo_h <= 0) { showToast('Informe um tempo válido.', 'warning'); return; }
         if (!sku) { showToast('Informe o código SKU.', 'warning'); return; }
+        if (isVariation && !variationParentId) { showToast('Selecione o produto base da variação.', 'warning'); return; }
+        if (isVariation && !variationLabel) { showToast('Informe o rótulo da variação.', 'warning'); return; }
+        if (isVariation && editingProductId && Number(variationParentId) === Number(editingProductId)) {
+            showToast('Um produto não pode ser variação dele mesmo.', 'warning');
+            return;
+        }
+
+        let finalCategoryId = category_id || null;
+        if (isVariation && variationParentId) {
+            const baseProduct = await Database.getById(Database.STORES.PRODUCTS, variationParentId);
+            if (!baseProduct) { showToast('Produto base da variação não encontrado.', 'danger'); return; }
+            finalCategoryId = baseProduct.category_id || finalCategoryId;
+        }
 
         // Check SKU uniqueness
         const skuUnique = await Database.isSkuUnique(sku, editingProductId);
@@ -1336,7 +1503,10 @@ const App = (() => {
 
         const data = {
             codigo_sku: sku,
-            category_id: category_id || null,
+            category_id: finalCategoryId,
+            is_variation: isVariation,
+            parent_product_id: isVariation ? variationParentId : null,
+            variation_label: isVariation ? variationLabel : '',
             nome,
             descricao: document.getElementById('prod-descricao')?.value.trim() || '',
             peso_g,
@@ -1488,35 +1658,53 @@ const App = (() => {
         }
     }
 
+    async function openCreateVariationModal(baseProductId) {
+        const base = await Database.getById(Database.STORES.PRODUCTS, baseProductId);
+        if (!base) {
+            showToast('Produto base não encontrado para criar variação.', 'warning');
+            return;
+        }
+
+        closeModal();
+        await openProductModal(null, { variationBaseId: base.id });
+    }
+
     async function refreshProductFiles(productId) {
         const container = document.getElementById('file-gallery-container');
         if (!container) return;
-        const product = await Database.getById(Database.STORES.PRODUCTS, productId);
+        const [product, ownerId] = await Promise.all([
+            Database.getById(Database.STORES.PRODUCTS, productId),
+            Database.resolveMediaOwnerProductId(productId)
+        ]);
+        const ownerProduct = await Database.getById(Database.STORES.PRODUCTS, ownerId);
         const files = await FileManager.getProductFiles(productId);
-        container.innerHTML = FileManager.renderFileGallery(files, productId, product?.cover_file_id || null);
+        container.innerHTML = FileManager.renderFileGallery(files, productId, ownerProduct?.cover_file_id || product?.cover_file_id || null);
         if (typeof lucide !== 'undefined') lucide.createIcons();
         await FileManager.loadThumbnails();
     }
 
     async function setProductCover(productId, fileId) {
-        const product = await Database.getById(Database.STORES.PRODUCTS, productId);
+        const [product, ownerId] = await Promise.all([
+            Database.getById(Database.STORES.PRODUCTS, productId),
+            Database.resolveMediaOwnerProductId(productId)
+        ]);
         if (!product) {
             showToast('Produto não encontrado.', 'warning');
             return;
         }
 
         const file = await Database.getById(Database.STORES.PRODUCT_FILES, fileId);
-        if (!file || file.product_id !== productId || file.tipo !== 'image') {
+        if (!file || Number(file.product_id) !== Number(ownerId) || file.tipo !== 'image') {
             showToast('Selecione uma imagem válida para capa.', 'warning');
             return;
         }
 
-        await Database.update(Database.STORES.PRODUCTS, productId, {
+        await Database.update(Database.STORES.PRODUCTS, ownerId, {
             cover_file_id: fileId,
             updated_at: new Date().toISOString()
         });
         await Storage.refreshCache();
-        showToast('Imagem de capa atualizada.', 'success');
+        showToast('Imagem de capa atualizada (compartilhada com base/variações).', 'success');
         await refreshProductFiles(productId);
         await renderProducts();
     }
@@ -1525,9 +1713,10 @@ const App = (() => {
         const ok = await confirmDialog('Excluir Arquivo', 'Tem certeza que deseja excluir este arquivo?');
         if (!ok) return;
 
-        const product = await Database.getById(Database.STORES.PRODUCTS, productId);
-        if (product && Number(product.cover_file_id) === Number(fileId)) {
-            await Database.update(Database.STORES.PRODUCTS, productId, {
+        const ownerId = await Database.resolveMediaOwnerProductId(productId);
+        const ownerProduct = await Database.getById(Database.STORES.PRODUCTS, ownerId);
+        if (ownerProduct && Number(ownerProduct.cover_file_id) === Number(fileId)) {
+            await Database.update(Database.STORES.PRODUCTS, ownerId, {
                 cover_file_id: null,
                 updated_at: new Date().toISOString()
             });
@@ -1758,12 +1947,14 @@ const App = (() => {
 
     async function openSaleModal(initialData = null) {
         const products = await Database.getAll(Database.STORES.PRODUCTS);
+        const productsById = new Map(products.map(p => [p.id, p]));
         const activeProducts = products.filter(p => p.ativo !== false);
         const clients = Storage.getSheet('CLIENTS');
 
-        const options = activeProducts.map(p =>
-            `<option value="${p.id}" data-preco="${p.preco_venda}" data-custo="${p.custo_total}">${escapeHtml(p.nome)} — ${fmtC(p.preco_venda)}</option>`
-        ).join('');
+        const options = activeProducts.map(p => {
+            const variationMeta = getProductVariationMeta(p, productsById);
+            return `<option value="${p.id}" data-preco="${p.preco_venda}" data-custo="${p.custo_total}" data-nome="${escapeHtml(variationMeta.displayName)}">${escapeHtml(variationMeta.displayName)} — ${fmtC(p.preco_venda)}</option>`;
+        }).join('');
 
         const clientOptions = clients
             .slice()
@@ -1988,7 +2179,7 @@ const App = (() => {
 
         if (priceInput && (!priceInput.value || parseFloat(priceInput.value) <= 0)) priceInput.value = String(unitPrice);
         if (costInput && (!costInput.value || parseFloat(costInput.value) <= 0)) costInput.value = String(unitCost);
-        if (itemNameInput && !itemNameInput.value.trim()) itemNameInput.value = option.textContent.split(' — ')[0] || '';
+        if (itemNameInput && !itemNameInput.value.trim()) itemNameInput.value = option.dataset.nome || option.textContent.split(' — ')[0] || '';
 
         calcSalePreview();
     }
@@ -2079,7 +2270,7 @@ const App = (() => {
         if (isCatalog && (!option || !option.value)) { showToast('Selecione um produto do catálogo.', 'warning'); return; }
 
         const productId = isCatalog ? parseInt(option.value) : null;
-        const itemNome = (document.getElementById('sale-item-name')?.value.trim() || (isCatalog ? option.textContent.split(' — ')[0] : '')).trim();
+        const itemNome = (document.getElementById('sale-item-name')?.value.trim() || (isCatalog ? (option.dataset.nome || option.textContent.split(' — ')[0]) : '')).trim();
         if (!itemNome) { showToast('Informe o nome do item da venda.', 'warning'); return; }
 
         const qty = Math.max(1, parseFloat(document.getElementById('sale-qty')?.value) || 1);
@@ -3687,6 +3878,34 @@ const App = (() => {
         return candidate;
     }
 
+    async function getUniqueVariationSku(baseSku) {
+        const root = String(baseSku || 'PROD').trim().toUpperCase().replace(/\s+/g, '-');
+        let index = 0;
+        let candidate = `${getAlphabetPrefix(index)}-${root}`;
+        while (!(await Database.isSkuUnique(candidate, editingProductId || null))) {
+            index += 1;
+            candidate = `${getAlphabetPrefix(index)}-${root}`;
+            if (index > 9999) {
+                candidate = `Z-${root}-${Date.now()}`;
+                break;
+            }
+        }
+        return candidate;
+    }
+
+    function getAlphabetPrefix(index) {
+        let n = Number(index) + 1;
+        if (!Number.isFinite(n) || n <= 0) n = 1;
+
+        let result = '';
+        while (n > 0) {
+            const rem = (n - 1) % 26;
+            result = String.fromCharCode(65 + rem) + result;
+            n = Math.floor((n - 1) / 26);
+        }
+        return result;
+    }
+
     function getUniqueCopyEmail(baseEmail, existingEmails) {
         const email = String(baseEmail || 'usuario@exemplo.com').trim().toLowerCase();
         const all = new Set((existingEmails || []).map(e => String(e || '').trim().toLowerCase()));
@@ -3719,8 +3938,8 @@ const App = (() => {
         _selectIcon, _selectColor,
         // Products
         openProductSummary, openProductModal, saveProduct, deleteProduct, duplicateProduct,
-        openProductInRootFolder,
-        calcProductPreview, switchProductTab, onCategoryChange,
+        openProductInRootFolder, openCreateVariationModal,
+        calcProductPreview, switchProductTab, onCategoryChange, toggleVariationFields, onVariationParentChange,
         toggleProductView, debounceProductSearch, filterProducts,
         refreshProductFiles, removeProductFile, downloadProductZip, setProductCover,
         // Sales

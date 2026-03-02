@@ -364,7 +364,19 @@ const RootStorage = (() => {
             ? await Database.getById(Database.STORES.CATEGORIES, product.category_id)
             : null;
 
-        const productFiles = await Database.getProductFiles(productId);
+        const mediaOwnerId = typeof Database.resolveMediaOwnerProductId === 'function'
+            ? await Database.resolveMediaOwnerProductId(productId)
+            : productId;
+        const mediaOwnerProduct = mediaOwnerId !== productId
+            ? await Database.getById(Database.STORES.PRODUCTS, mediaOwnerId)
+            : product;
+        const mediaOwnerCategory = mediaOwnerProduct?.category_id
+            ? await Database.getById(Database.STORES.CATEGORIES, mediaOwnerProduct.category_id)
+            : category;
+
+        const productFiles = typeof Database.getProductFilesShared === 'function'
+            ? await Database.getProductFilesShared(productId)
+            : await Database.getProductFiles(productId);
         const preferredFile = (!productFiles || productFiles.length === 0)
             ? null
             : productFiles.find(f => f.tipo === 'model3d' && /\.stl$/i.test(String(f.nome_arquivo || '')))
@@ -382,14 +394,14 @@ const RootStorage = (() => {
         let relativeFolder = '';
         try {
             const collectionsRoot = await filesRoot.getDirectoryHandle(FILES_COLLECTIONS_SUBFOLDER, { create: false });
-            const collectionDir = await collectionsRoot.getDirectoryHandle(getCollectionFolderName(category), { create: false });
-            const productDir = await collectionDir.getDirectoryHandle(getProductFolderName(product), { create: false });
+            const collectionDir = await collectionsRoot.getDirectoryHandle(getCollectionFolderName(mediaOwnerCategory), { create: false });
+            const productDir = await collectionDir.getDirectoryHandle(getProductFolderName(mediaOwnerProduct || product), { create: false });
             if (fileTypeDir) {
                 targetDir = await productDir.getDirectoryHandle(fileTypeDir, { create: false });
-                relativeFolder = `${DATA_FOLDER}/${FILES_SUBFOLDER}/${FILES_COLLECTIONS_SUBFOLDER}/${getCollectionFolderName(category)}/${getProductFolderName(product)}/${fileTypeDir}`;
+                relativeFolder = `${DATA_FOLDER}/${FILES_SUBFOLDER}/${FILES_COLLECTIONS_SUBFOLDER}/${getCollectionFolderName(mediaOwnerCategory)}/${getProductFolderName(mediaOwnerProduct || product)}/${fileTypeDir}`;
             } else {
                 targetDir = productDir;
-                relativeFolder = `${DATA_FOLDER}/${FILES_SUBFOLDER}/${FILES_COLLECTIONS_SUBFOLDER}/${getCollectionFolderName(category)}/${getProductFolderName(product)}`;
+                relativeFolder = `${DATA_FOLDER}/${FILES_SUBFOLDER}/${FILES_COLLECTIONS_SUBFOLDER}/${getCollectionFolderName(mediaOwnerCategory)}/${getProductFolderName(mediaOwnerProduct || product)}`;
             }
         } catch (_) {
             if (!fileTypeDir) {
