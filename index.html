@@ -224,6 +224,27 @@
                                 <span class="kpi-value" id="kpi-receivable">R$ 0,00</span>
                             </div>
                         </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="receipt"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Ticket Médio</span>
+                                <span class="kpi-value" id="kpi-ticket">R$ 0,00</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="gauge"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Peso de Gastos</span>
+                                <span class="kpi-value" id="kpi-burn">0%</span>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon"><i data-lucide="shield-alert"></i></div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Inadimplência</span>
+                                <span class="kpi-value" id="kpi-default-rate">0%</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="dashboard-charts">
@@ -237,6 +258,21 @@
                             <h3><i data-lucide="pie-chart"></i> Vendas por Categoria</h3>
                             <div class="chart-wrapper chart-wrapper-sm">
                                 <canvas id="chart-categorias"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-charts">
+                        <div class="chart-container">
+                            <h3><i data-lucide="activity"></i> Fluxo Financeiro Semanal (Vendas × Gastos × Líquido)</h3>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-finance-weekly"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container chart-sm">
+                            <h3><i data-lucide="receipt-text"></i> Gastos por Categoria (Mês)</h3>
+                            <div class="chart-wrapper chart-wrapper-sm">
+                                <canvas id="chart-expenses-category"></canvas>
                             </div>
                         </div>
                     </div>
@@ -257,6 +293,21 @@
                             <h3><i data-lucide="alert-triangle"></i> Alertas de Estoque</h3>
                             <div id="stock-alerts">
                                 <p class="text-muted text-center" style="padding:2rem;">Nenhum alerta.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-row">
+                        <div class="card">
+                            <h3><i data-lucide="sparkles"></i> Resumos Inteligentes</h3>
+                            <div id="dashboard-insights" class="dashboard-insights">
+                                <p class="text-muted" style="padding:0.5rem 0;">Sem insights no momento.</p>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3><i data-lucide="wallet-cards"></i> Administração de Gastos</h3>
+                            <div id="dashboard-expense-admin" class="expense-admin">
+                                <p class="text-muted" style="padding:0.5rem 0;">Sem gastos registrados no mês.</p>
                             </div>
                         </div>
                     </div>

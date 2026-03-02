@@ -7,6 +7,8 @@
 const Dashboard = (() => {
     let chartVendas = null;
     let chartCategorias = null;
+    let chartFinanceWeekly = null;
+    let chartExpensesCategory = null;
 
     // ------------------------------------------
     // Renderiza dashboard completo
@@ -14,9 +16,13 @@ const Dashboard = (() => {
     async function render() {
         await renderKPIs();
         renderChart();
-        renderCategoryChart();
+        await renderCategoryChart();
+        renderWeeklyFinanceChart();
+        renderExpenseCategoryChart();
         renderRecentSales();
         await renderStockAlerts();
+        renderSmartInsights();
+        renderExpenseAdmin();
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
@@ -34,6 +40,11 @@ const Dashboard = (() => {
         const totalGastos = expenses.reduce((sum, e) => sum + (parseFloat(e.valor_total) || 0), 0);
         const resultadoLiquido = totalLucro - totalGastos;
         const totalAReceber = allSales.reduce((sum, s) => sum + (Math.max(0, parseFloat(s.valor_devido) || 0)), 0);
+        const ticketMedio = sales.length > 0 ? totalVendido / sales.length : 0;
+        const pesoGastos = totalVendido > 0 ? (totalGastos / totalVendido) * 100 : 0;
+        const taxaInadimplenciaMes = totalVendido > 0
+            ? (sales.reduce((sum, s) => sum + (Math.max(0, parseFloat(s.valor_devido) || 0)), 0) / totalVendido) * 100
+            : 0;
         const margemMedia = sales.length > 0
             ? sales.reduce((sum, s) => {
                 const venda = parseFloat(s.valor_venda) || 0;
@@ -68,6 +79,9 @@ const Dashboard = (() => {
         setKPI('kpi-expenses', Calculator.formatCurrency(totalGastos));
         setKPI('kpi-net', Calculator.formatCurrency(resultadoLiquido));
         setKPI('kpi-receivable', Calculator.formatCurrency(totalAReceber));
+        setKPI('kpi-ticket', Calculator.formatCurrency(ticketMedio));
+        setKPI('kpi-burn', formatPercent(pesoGastos));
+        setKPI('kpi-default-rate', formatPercent(taxaInadimplenciaMes));
     }
 
     // ------------------------------------------
@@ -214,6 +228,166 @@ const Dashboard = (() => {
         });
     }
 
+    function renderWeeklyFinanceChart() {
+        const canvas = document.getElementById('chart-finance-weekly');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const sales = Storage.getSheet('SALES');
+        const expenses = Storage.getSheet('EXPENSES');
+        const buckets = buildRecentWeekBuckets(8);
+
+        sales.forEach(s => {
+            const d = new Date(s.data_venda);
+            if (isNaN(d.getTime())) return;
+            const key = getWeekKey(d);
+            if (buckets[key]) {
+                buckets[key].vendas += parseFloat(s.valor_venda) || 0;
+            }
+        });
+
+        expenses.forEach(e => {
+            const d = new Date(e.data_gasto);
+            if (isNaN(d.getTime())) return;
+            const key = getWeekKey(d);
+            if (buckets[key]) {
+                buckets[key].gastos += parseFloat(e.valor_total) || 0;
+            }
+        });
+
+        const labels = Object.keys(buckets).map(k => {
+            const [year, week] = k.split('-W');
+            return `S${week}/${String(year).slice(2)}`;
+        });
+        const salesData = Object.values(buckets).map(v => v.vendas);
+        const expensesData = Object.values(buckets).map(v => v.gastos);
+        const netData = Object.values(buckets).map(v => v.vendas - v.gastos);
+
+        if (chartFinanceWeekly) { chartFinanceWeekly.destroy(); chartFinanceWeekly = null; }
+
+        chartFinanceWeekly = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Vendas',
+                        data: salesData,
+                        borderColor: '#00BCFF',
+                        backgroundColor: 'rgba(0, 188, 255, 0.2)',
+                        fill: false,
+                        tension: 0.35,
+                        pointRadius: 3
+                    },
+                    {
+                        label: 'Gastos',
+                        data: expensesData,
+                        borderColor: 'rgba(249, 115, 22, 1)',
+                        backgroundColor: 'rgba(249, 115, 22, 0.2)',
+                        fill: false,
+                        tension: 0.35,
+                        pointRadius: 3
+                    },
+                    {
+                        label: 'Líquido',
+                        data: netData,
+                        borderColor: 'rgba(34, 197, 94, 1)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                        fill: false,
+                        tension: 0.35,
+                        pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#94a3b8', padding: 14, usePointStyle: true, pointStyleWidth: 10, font: { size: 11 } } },
+                    tooltip: {
+                        backgroundColor: '#0a0a12', titleColor: '#e2e8f0', bodyColor: '#94a3b8',
+                        borderColor: '#1e293b', borderWidth: 1, cornerRadius: 8, padding: 12,
+                        callbacks: { label: ctx => `${ctx.dataset.label}: ${Calculator.formatCurrency(ctx.parsed.y || 0)}` }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: { color: '#94a3b8', font: { size: 11 }, callback: v => `R$ ${Number(v).toLocaleString('pt-BR')}` },
+                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false }
+                    },
+                    x: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    function renderExpenseCategoryChart() {
+        const canvas = document.getElementById('chart-expenses-category');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const monthExpenses = getMonthExpenses();
+        const categoryMap = {};
+
+        monthExpenses.forEach(e => {
+            const cat = String(e.categoria || 'Sem Categoria').trim() || 'Sem Categoria';
+            categoryMap[cat] = (categoryMap[cat] || 0) + (parseFloat(e.valor_total) || 0);
+        });
+
+        const sorted = Object.entries(categoryMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6);
+
+        const labels = sorted.map(([name]) => name);
+        const data = sorted.map(([, value]) => value);
+
+        if (labels.length === 0) {
+            labels.push('Sem gastos');
+            data.push(0);
+        }
+
+        if (chartExpensesCategory) { chartExpensesCategory.destroy(); chartExpensesCategory = null; }
+
+        chartExpensesCategory = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Gastos (R$)',
+                    data,
+                    backgroundColor: 'rgba(249, 115, 22, 0.7)',
+                    borderColor: 'rgba(249, 115, 22, 1)',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#0a0a12', titleColor: '#e2e8f0', bodyColor: '#94a3b8',
+                        borderColor: '#1e293b', borderWidth: 1, cornerRadius: 8, padding: 12,
+                        callbacks: { label: ctx => `Gastos: ${Calculator.formatCurrency(ctx.parsed.y || 0)}` }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#94a3b8', font: { size: 11 }, callback: v => `R$ ${Number(v).toLocaleString('pt-BR')}` },
+                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false }
+                    },
+                    x: {
+                        ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 35, minRotation: 0 },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
     // ------------------------------------------
     // Vendas recentes (últimas 5)
     // ------------------------------------------
@@ -273,6 +447,135 @@ const Dashboard = (() => {
         `).join('');
     }
 
+    function renderSmartInsights() {
+        const el = document.getElementById('dashboard-insights');
+        if (!el) return;
+
+        const monthSales = getMonthSales();
+        const monthExpenses = getMonthExpenses();
+        const allSales = Storage.getSheet('SALES');
+        const allProducts = Storage.getSheet('PRODUCTS');
+
+        const totalSales = monthSales.reduce((sum, s) => sum + (parseFloat(s.valor_venda) || 0), 0);
+        const totalProfit = monthSales.reduce((sum, s) => sum + (parseFloat(s.lucro) || 0), 0);
+        const totalExpenses = monthExpenses.reduce((sum, e) => sum + (parseFloat(e.valor_total) || 0), 0);
+        const receivable = allSales.reduce((sum, s) => sum + (Math.max(0, parseFloat(s.valor_devido) || 0)), 0);
+        const lowStock = allProducts.filter(p => p.estoque_minimo > 0 && (p.quantidade_estoque || 0) <= p.estoque_minimo).length;
+
+        const expenseByCategory = {};
+        monthExpenses.forEach(e => {
+            const key = String(e.categoria || 'Sem Categoria');
+            expenseByCategory[key] = (expenseByCategory[key] || 0) + (parseFloat(e.valor_total) || 0);
+        });
+        const topExpense = Object.entries(expenseByCategory).sort((a, b) => b[1] - a[1])[0] || null;
+
+        const insights = [];
+
+        if (monthSales.length === 0 && monthExpenses.length === 0) {
+            insights.push({ tone: 'neutral', text: 'Sem movimentação no mês atual. Registre vendas e gastos para receber recomendações automáticas.' });
+        } else {
+            const net = totalProfit - totalExpenses;
+            insights.push({
+                tone: net >= 0 ? 'positive' : 'negative',
+                text: `Resultado líquido do mês está em ${Calculator.formatCurrency(net)} (${net >= 0 ? 'positivo' : 'negativo'}).`
+            });
+
+            if (topExpense) {
+                const share = totalExpenses > 0 ? (topExpense[1] / totalExpenses) * 100 : 0;
+                insights.push({
+                    tone: share >= 35 ? 'warning' : 'neutral',
+                    text: `Maior centro de gasto: ${topExpense[0]} com ${Calculator.formatCurrency(topExpense[1])} (${formatPercent(share)} do total de gastos).`
+                });
+            }
+
+            const marginAfterExpenses = totalSales > 0 ? ((totalProfit - totalExpenses) / totalSales) * 100 : 0;
+            insights.push({
+                tone: marginAfterExpenses >= 20 ? 'positive' : (marginAfterExpenses >= 10 ? 'warning' : 'negative'),
+                text: `Margem líquida após gastos: ${formatPercent(marginAfterExpenses)} sobre o faturamento do mês.`
+            });
+
+            if (receivable > 0) {
+                insights.push({
+                    tone: 'warning',
+                    text: `Existe ${Calculator.formatCurrency(receivable)} em aberto. Priorize cobrança e conciliação de pagamentos pendentes.`
+                });
+            }
+
+            if (lowStock > 0) {
+                insights.push({
+                    tone: 'warning',
+                    text: `${lowStock} produto(s) estão em estoque baixo. Planeje reposição para evitar perda de venda.`
+                });
+            }
+        }
+
+        el.innerHTML = insights.map(item => `
+            <div class="insight-item insight-${item.tone}">
+                <i data-lucide="lightbulb"></i>
+                <span>${escapeHtml(item.text)}</span>
+            </div>
+        `).join('');
+    }
+
+    function renderExpenseAdmin() {
+        const el = document.getElementById('dashboard-expense-admin');
+        if (!el) return;
+
+        const monthExpenses = getMonthExpenses();
+        if (monthExpenses.length === 0) {
+            el.innerHTML = '<p class="text-muted" style="padding:0.5rem 0;">Sem gastos registrados no mês.</p>';
+            return;
+        }
+
+        const total = monthExpenses.reduce((sum, e) => sum + (parseFloat(e.valor_total) || 0), 0);
+        const avg = monthExpenses.length > 0 ? total / monthExpenses.length : 0;
+
+        const byCategory = {};
+        const byPayment = {};
+
+        monthExpenses.forEach(e => {
+            const cat = String(e.categoria || 'Sem Categoria');
+            const pay = String(e.tipo_pagamento || 'Outro');
+            byCategory[cat] = (byCategory[cat] || 0) + (parseFloat(e.valor_total) || 0);
+            byPayment[pay] = (byPayment[pay] || 0) + (parseFloat(e.valor_total) || 0);
+        });
+
+        const topCats = Object.entries(byCategory).sort((a, b) => b[1] - a[1]).slice(0, 4);
+        const topPayments = Object.entries(byPayment).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+        el.innerHTML = `
+            <div class="expense-admin-summary">
+                <div><strong>Total no mês:</strong> ${Calculator.formatCurrency(total)}</div>
+                <div><strong>Registros:</strong> ${monthExpenses.length}</div>
+                <div><strong>Média por gasto:</strong> ${Calculator.formatCurrency(avg)}</div>
+            </div>
+            <div class="expense-admin-columns">
+                <div>
+                    <h4>Top Categorias</h4>
+                    <div class="expense-admin-list">
+                        ${topCats.map(([name, value]) => `
+                            <div class="expense-admin-item">
+                                <span>${escapeHtml(name)}</span>
+                                <strong>${Calculator.formatCurrency(value)}</strong>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div>
+                    <h4>Formas de Pagamento</h4>
+                    <div class="expense-admin-list">
+                        ${topPayments.map(([name, value]) => `
+                            <div class="expense-admin-item">
+                                <span>${escapeHtml(name)}</span>
+                                <strong>${Calculator.formatCurrency(value)}</strong>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     // --- Helpers ---
 
     function getMonthSales() {
@@ -313,6 +616,31 @@ const Dashboard = (() => {
         const productId = parseInt(key.replace('product:', ''));
         const product = products.find(p => p.id === productId);
         return product ? product.nome : 'Desconhecido';
+    }
+
+    function formatPercent(value) {
+        const number = Number.isFinite(value) ? value : 0;
+        return `${number.toFixed(1)}%`;
+    }
+
+    function getWeekKey(date) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+    }
+
+    function buildRecentWeekBuckets(weeksCount) {
+        const map = {};
+        for (let i = weeksCount - 1; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - (i * 7));
+            const key = getWeekKey(date);
+            map[key] = { vendas: 0, gastos: 0 };
+        }
+        return map;
     }
 
     function formatDate(dateStr) {

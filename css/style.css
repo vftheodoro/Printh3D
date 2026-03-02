@@ -2372,6 +2372,119 @@ input[type="checkbox"] {
 }
 
 /* ============================================
+   DASHBOARD INSIGHTS & EXPENSE ADMIN
+   ============================================ */
+.dashboard-insights {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.insight-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.insight-item .lucide {
+    width: 16px;
+    height: 16px;
+    margin-top: 0.1rem;
+    flex-shrink: 0;
+}
+
+.insight-item span {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.insight-positive {
+    border-color: rgba(34, 197, 94, 0.35);
+}
+
+.insight-positive .lucide {
+    color: var(--success);
+}
+
+.insight-warning {
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.insight-warning .lucide {
+    color: var(--warning);
+}
+
+.insight-negative {
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
+.insight-negative .lucide {
+    color: var(--danger);
+}
+
+.insight-neutral .lucide {
+    color: var(--info);
+}
+
+.expense-admin {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.expense-admin-summary {
+    display: grid;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    padding: 0.7rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.expense-admin-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.expense-admin-columns h4 {
+    font-size: 0.77rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.45rem;
+}
+
+.expense-admin-list {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.expense-admin-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.65rem;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.expense-admin-item:last-child {
+    border-bottom: none;
+}
+
+.expense-admin-item strong {
+    color: var(--text);
+}
+
+/* ============================================
    CONFIRMATION MODAL
    ============================================ */
 .confirm-overlay {
