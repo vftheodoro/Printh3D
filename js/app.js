@@ -445,6 +445,10 @@ const App = (() => {
         const status = RootStorage.getStatus();
         if (!status.supported || status.active) return;
 
+        if (status.hadSavedHandle && status.reconnectIssue) {
+            showToast('Pasta raiz salva encontrada, mas não foi possível reconectar automaticamente. Reautorize ou selecione a pasta novamente.', 'warning');
+        }
+
         openRootStorageOnboardingModal();
     }
 
@@ -456,7 +460,7 @@ const App = (() => {
             </p>
             <ul class="text-secondary" style="padding-left:1rem;margin:0 0 1rem 0;display:grid;gap:0.35rem;">
                 <li>Dados ficam organizados em JSON na pasta <strong>printh3d_data/data</strong>.</li>
-                <li>Imagens e arquivos ficam separados por tipo em <strong>printh3d_data/files</strong>.</li>
+                <li>Arquivos ficam em estrutura hierárquica por coleção e produto em <strong>printh3d_data/files/collections</strong>.</li>
                 <li>Configurações, filtros e visualizações ficam em <strong>printh3d_data/config</strong>.</li>
                 <li>Se o sistema falhar, você consegue recuperar tudo manualmente pela raiz.</li>
             </ul>
@@ -830,6 +834,7 @@ const App = (() => {
                         <td>${statusBadge}</td>
                         <td class="actions">
                             <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.duplicateProduct(${p.id})" title="Duplicar"><i data-lucide="copy"></i></button>
+                            <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.openProductInRootFolder(${p.id})" title="Abrir na Pasta Raiz"><i data-lucide="folder-open"></i></button>
                             <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.openProductModal(${p.id})" title="Editar"><i data-lucide="pencil"></i></button>
                             <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); App.downloadProductZip(${p.id})" title="ZIP"><i data-lucide="archive"></i></button>
                             <button class="btn btn-sm btn-icon btn-danger-ghost" onclick="event.stopPropagation(); App.deleteProduct(${p.id})" title="Excluir"><i data-lucide="trash-2"></i></button>
@@ -1039,6 +1044,7 @@ const App = (() => {
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Fechar</button>
                 <button type="button" class="btn btn-secondary" onclick="App.duplicateProduct(${product.id})"><i data-lucide="copy"></i> Duplicar Produto</button>
+                <button type="button" class="btn btn-secondary" onclick="App.openProductInRootFolder(${product.id})"><i data-lucide="folder-open"></i> Abrir na Pasta Raiz</button>
                 <button type="button" class="btn btn-secondary" onclick="App.downloadProductZip(${product.id})"><i data-lucide="archive"></i> Exportar ZIP</button>
                 <button type="button" class="btn btn-primary" onclick="App.openProductModal(${product.id})"><i data-lucide="pencil"></i> Editar Produto</button>
             </div>
@@ -1444,6 +1450,42 @@ const App = (() => {
         await Storage.refreshCache();
         showToast('Produto duplicado com sucesso.', 'success');
         await renderProducts();
+    }
+
+    async function openProductInRootFolder(productId) {
+        if (!Auth.isAdmin()) {
+            showToast('Somente administradores podem acessar a Pasta Raiz.', 'warning');
+            return;
+        }
+
+        try {
+            if (typeof RootStorage === 'undefined') throw new Error('Módulo de pasta raiz não carregado.');
+
+            if (!RootStorage.isActive()) {
+                try {
+                    await RootStorage.initFromSavedHandle();
+                } catch (_) {}
+            }
+
+            if (!RootStorage.isActive()) {
+                const ok = await confirmDialog('Pasta Raiz não conectada', 'Não foi possível acessar a Pasta Raiz automaticamente. Deseja conectar agora?');
+                if (!ok) return;
+                await connectRootStorage();
+                if (!RootStorage.isActive()) return;
+            }
+
+            const result = await RootStorage.openProductFolder(productId);
+            const highlightText = result.highlightedFileName
+                ? ` Arquivo destaque: ${result.highlightedFileName}.`
+                : '';
+            if (result.opened) {
+                showToast(`Pasta aberta em ${result.relativeFolder}.${highlightText}`, 'success');
+            } else {
+                showToast(`Pasta localizada em ${result.relativeFolder}.${highlightText}`, 'info');
+            }
+        } catch (err) {
+            showToast('Falha ao abrir produto na Pasta Raiz: ' + err.message, 'danger');
+        }
     }
 
     async function refreshProductFiles(productId) {
@@ -3100,6 +3142,10 @@ const App = (() => {
         }
 
         if (!status.active) {
+            if (status.hadSavedHandle) {
+                statusEl.textContent = 'Pasta salva encontrada, mas sem acesso no momento. Reautorize a pasta para reconectar.';
+                return;
+            }
             statusEl.textContent = 'Nenhuma pasta conectada.';
             return;
         }
@@ -3128,13 +3174,18 @@ const App = (() => {
         if (!Auth.isAdmin()) return;
         try {
             if (typeof RootStorage === 'undefined') throw new Error('Módulo de pasta raiz não carregado.');
-            await RootStorage.syncFromDatabase({
+            const manifest = await RootStorage.syncFromDatabase({
                 uiState: getCurrentUIState(),
                 sessionState: {
                     currentUser: Auth.getCurrentUser() || null
                 }
             });
-            if (!silent) showToast('Sincronização concluída na pasta raiz.', 'success');
+            if (!silent) {
+                showToast('Sincronização concluída na pasta raiz.', 'success');
+                if (manifest?.cleanup_skipped) {
+                    showToast('Sincronização concluída com limpeza parcial: alguns arquivos antigos podem ter permanecido por restrição de permissão do navegador.', 'warning');
+                }
+            }
         } catch (err) {
             if (!silent) showToast('Falha na sincronização: ' + err.message, 'danger');
             if (silent) throw err;
@@ -3668,6 +3719,7 @@ const App = (() => {
         _selectIcon, _selectColor,
         // Products
         openProductSummary, openProductModal, saveProduct, deleteProduct, duplicateProduct,
+        openProductInRootFolder,
         calcProductPreview, switchProductTab, onCategoryChange,
         toggleProductView, debounceProductSearch, filterProducts,
         refreshProductFiles, removeProductFile, downloadProductZip, setProductCover,

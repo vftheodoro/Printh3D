@@ -24,8 +24,8 @@ Stores principais:
 
 Espelho físico (`printh3d_data/`):
 - `data/*.json`: dados transacionais por store
-- `data/product_files_meta.json`: metadados dos anexos
-- `files/images|models_3d|documents|others`: arquivos binários separados por tipo
+- `data/product_files_meta.json` e `data/product_files_index.json`: metadados/índice dos anexos
+- `files/collections/<colecao>/<produto>/images|models_3d|documents|others`: arquivos binários por coleção/produto
 - `config/ui_state.json`: filtros e visualização exportados
 - `config/session_state.json`: sessão exportada
 - `manifest.json`: resumo do snapshot

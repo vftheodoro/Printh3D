@@ -6,6 +6,11 @@
 const Auth = (() => {
     const SESSION_KEY = 'printh3d_session';
 
+    function saveSession(session) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    }
+
     // ------------------------------------------
     // Realiza login verificando email e SHA-256
     // ------------------------------------------
@@ -24,7 +29,7 @@ const Auth = (() => {
                 email: user.email,
                 tipo: user.tipo
             };
-            sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+            saveSession(session);
             return { success: true, user: session };
         }
 
@@ -35,6 +40,7 @@ const Auth = (() => {
     // Encerra sessão e redireciona para login
     // ------------------------------------------
     function logout() {
+        localStorage.removeItem(SESSION_KEY);
         sessionStorage.removeItem(SESSION_KEY);
         window.location.href = 'login.html';
     }
@@ -43,11 +49,17 @@ const Auth = (() => {
     // Retorna dados do usuário logado ou null
     // ------------------------------------------
     function getCurrentUser() {
-        const raw = sessionStorage.getItem(SESSION_KEY);
+        const raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
         if (!raw) return null;
         try {
-            return JSON.parse(raw);
+            const parsed = JSON.parse(raw);
+            if (parsed) {
+                saveSession(parsed);
+            }
+            return parsed;
         } catch {
+            localStorage.removeItem(SESSION_KEY);
+            sessionStorage.removeItem(SESSION_KEY);
             return null;
         }
     }

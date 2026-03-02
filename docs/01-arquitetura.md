@@ -99,7 +99,7 @@ Observações de modelagem:
 
 Espelho físico na Pasta Raiz:
 - `printh3d_data/data/*.json`: stores transacionais e metadados de arquivos.
-- `printh3d_data/files/images|models_3d|documents|others`: blobs exportados em arquivos reais.
+- `printh3d_data/files/collections/<colecao>/<produto>/images|models_3d|documents|others`: blobs exportados em estrutura hierárquica.
 - `printh3d_data/config/ui_state.json`: filtros e estado visual da interface.
 - `printh3d_data/config/session_state.json`: estado de sessão exportado.
 

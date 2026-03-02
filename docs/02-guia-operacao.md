@@ -153,6 +153,6 @@ Como funciona:
 
 Estrutura gerada:
 - `printh3d_data/data`: JSONs com dados de vendas, clientes, gastos, usuários, configurações, etc.
-- `printh3d_data/files`: mídias e anexos separados por tipo.
+- `printh3d_data/files/collections/<colecao>/<produto>`: mídias e anexos organizados por coleção e produto.
 - `printh3d_data/config`: estado de filtros e visualizações.
 - `printh3d_data/manifest.json`: resumo da última sincronização.

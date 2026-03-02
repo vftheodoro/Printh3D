@@ -106,8 +106,8 @@ Principais objetivos:
 Estrutura criada na pasta selecionada:
 - `printh3d_data/manifest.json`
 - `printh3d_data/README.txt`
-- `printh3d_data/data/*.json` (users, settings, categories, products, promotions, coupons, sales, clients, expenses, trash, product_files_meta)
-- `printh3d_data/files/images|models_3d|documents|others`
+- `printh3d_data/data/*.json` (users, settings, categories, products, promotions, coupons, sales, clients, expenses, trash, product_files_meta, product_files_index)
+- `printh3d_data/files/collections/<colecao>/<produto>/images|models_3d|documents|others`
 - `printh3d_data/config/ui_state.json` (filtros/visualização)
 - `printh3d_data/config/session_state.json` (estado de sessão exportado)
 
