@@ -731,7 +731,10 @@ const Database = (() => {
         info += `Material: ${product.material || ''}\n`;
         info += `Cor: ${product.cor || ''}\n`;
         info += `Peso: ${product.peso_g}g\n`;
-        info += `Tempo de impressão: ${product.tempo_h}h\n`;
+        const tempoMin = Number(product.tempo_min || 0) > 0
+            ? Number(product.tempo_min || 0)
+            : (Number(product.tempo_h || 0) > 0 ? Number(product.tempo_h || 0) * 60 : 0);
+        info += `Tempo de impressão: ${tempoMin} min\n`;
         if (product.dimensoes) {
             info += `Dimensões: ${product.dimensoes.largura}x${product.dimensoes.altura}x${product.dimensoes.profundidade} mm\n`;
         }

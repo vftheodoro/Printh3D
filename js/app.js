@@ -1061,7 +1061,7 @@ const App = (() => {
 
             <div class="form-grid">
                 <div class="form-group"><label>Peso</label><p>${product.peso_g || 0} g</p></div>
-                <div class="form-group"><label>Tempo de impressão</label><p>${product.tempo_h || 0} h</p></div>
+                <div class="form-group"><label>Tempo de impressão</label><p>${Calculator.resolveTempoMinutos(product.tempo_min, product.tempo_h) || 0} min</p></div>
                 <div class="form-group"><label>Margem</label><p class="${margin < 20 ? 'text-danger' : 'text-success'}">${margin.toFixed(1)}%</p></div>
             </div>
 
@@ -1199,6 +1199,8 @@ const App = (() => {
         const dim = p.dimensoes || {};
         const social = p.descricoes_social || {};
         const socialGeral = social.geral || social.instagram || social.facebook || social.whatsapp || social.tiktok || '';
+        const pTempoMin = Calculator.resolveTempoMinutos(p.tempo_min, p.tempo_h);
+        const materialExtra = Number(p.custos_adicionais?.material_extra || 0);
 
         const html = `
         <div class="modal-tabs">
@@ -1257,8 +1259,12 @@ const App = (() => {
                         <input type="number" id="prod-peso" value="${p.peso_g || ''}" required min="0.1" step="0.1" placeholder="150" oninput="App.calcProductPreview()">
                     </div>
                     <div class="form-group">
-                        <label>Tempo (h)</label>
-                        <input type="number" id="prod-tempo" value="${p.tempo_h || ''}" required min="0.1" step="0.1" placeholder="3.5" oninput="App.calcProductPreview()">
+                        <label>Tempo (min)</label>
+                        <input type="number" id="prod-tempo-min" value="${pTempoMin || ''}" required min="1" step="1" placeholder="210" oninput="App.calcProductPreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>Material Extra (R$)</label>
+                        <input type="number" id="prod-material-extra" value="${materialExtra || ''}" step="0.01" min="0" placeholder="0,00" oninput="App.calcProductPreview()">
                     </div>
                     <div class="form-group">
                         <label>Preço (R$)</label>
@@ -1439,13 +1445,18 @@ const App = (() => {
 
     function calcProductPreview() {
         const peso = parseFloat(document.getElementById('prod-peso')?.value);
-        const tempo = parseFloat(document.getElementById('prod-tempo')?.value);
+        const tempoMin = parseFloat(document.getElementById('prod-tempo-min')?.value);
+        const materialExtra = Math.max(0, parseFloat(document.getElementById('prod-material-extra')?.value) || 0);
         const previewEl = document.getElementById('calc-preview');
-        if (!peso || !tempo || peso <= 0 || tempo <= 0) {
+        if (!peso || !tempoMin || peso <= 0 || tempoMin <= 0) {
             if (previewEl) previewEl.style.display = 'none';
             return;
         }
-        const calc = Calculator.calcular(peso, tempo);
+        const calc = Calculator.calcularDetalhado({
+            peso_g: peso,
+            tempo_min: tempoMin,
+            adicional_material: materialExtra
+        });
         if (previewEl) previewEl.style.display = 'block';
         setText('calc-material', fmtC(calc.custoMaterial));
         setText('calc-maquina', fmtC(calc.custoMaquina));
@@ -1467,16 +1478,17 @@ const App = (() => {
     async function saveProduct() {
         const nome = document.getElementById('prod-nome')?.value.trim();
         const peso_g = parseFloat(document.getElementById('prod-peso')?.value);
-        const tempo_h = parseFloat(document.getElementById('prod-tempo')?.value);
+        const tempo_min = parseFloat(document.getElementById('prod-tempo-min')?.value);
         const category_id = parseInt(document.getElementById('prod-category')?.value);
         const sku = document.getElementById('prod-sku')?.value.trim().toUpperCase();
+        const materialExtra = Math.max(0, parseFloat(document.getElementById('prod-material-extra')?.value) || 0);
         const isVariation = document.getElementById('prod-is-variation')?.checked === true;
         const variationParentId = parseInt(document.getElementById('prod-parent-product')?.value) || null;
         const variationLabel = document.getElementById('prod-variation-label')?.value.trim() || '';
 
         if (!nome) { showToast('Informe o nome do produto.', 'warning'); return; }
         if (!peso_g || peso_g <= 0) { showToast('Informe um peso válido.', 'warning'); return; }
-        if (!tempo_h || tempo_h <= 0) { showToast('Informe um tempo válido.', 'warning'); return; }
+        if (!tempo_min || tempo_min <= 0) { showToast('Informe um tempo válido em minutos.', 'warning'); return; }
         if (!sku) { showToast('Informe o código SKU.', 'warning'); return; }
         if (isVariation && !variationParentId) { showToast('Selecione o produto base da variação.', 'warning'); return; }
         if (isVariation && !variationLabel) { showToast('Informe o rótulo da variação.', 'warning'); return; }
@@ -1496,7 +1508,11 @@ const App = (() => {
         const skuUnique = await Database.isSkuUnique(sku, editingProductId);
         if (!skuUnique) { showToast('Este SKU já está em uso.', 'danger'); return; }
 
-        const calc = Calculator.calcular(peso_g, tempo_h);
+        const calc = Calculator.calcularDetalhado({
+            peso_g,
+            tempo_min,
+            adicional_material: materialExtra
+        });
         const customPrice = parseFloat(document.getElementById('prod-preco')?.value);
         const precoFinal = (customPrice && customPrice > 0) ? customPrice : calc.precoVenda;
         const socialGeral = document.getElementById('prod-social-geral')?.value || '';
@@ -1510,7 +1526,8 @@ const App = (() => {
             nome,
             descricao: document.getElementById('prod-descricao')?.value.trim() || '',
             peso_g,
-            tempo_h,
+            tempo_min: Calculator.round2(tempo_min),
+            tempo_h: Calculator.round2(tempo_min / 60),
             dimensoes: {
                 largura: parseFloat(document.getElementById('prod-dim-l')?.value) || 0,
                 altura: parseFloat(document.getElementById('prod-dim-a')?.value) || 0,
@@ -1520,6 +1537,28 @@ const App = (() => {
             cor: document.getElementById('prod-cor')?.value.trim() || '',
             resolucao_camada: parseFloat(document.getElementById('prod-resolucao')?.value) || 0.2,
             custo_total: calc.custoTotal,
+            calculation_mode: 'basic',
+            custos_adicionais: {
+                material_extra: Calculator.round2(materialExtra)
+            },
+            custo_detalhado: {
+                inputs: calc.inputs,
+                custoMaterialBase: calc.custoMaterialBase,
+                custoMaterial: calc.custoMaterial,
+                custoMaquina: calc.custoMaquina,
+                energia_kwh: calc.energia_kwh,
+                custoEnergia: calc.custoEnergia,
+                custoDepreciacao: calc.custoDepreciacao,
+                subtotal: calc.subtotal,
+                custoFalhas: calc.custoFalhas,
+                custoBase: calc.custoBase,
+                custoAcabamento: calc.custoAcabamento,
+                totalAdicionais: calc.totalAdicionais,
+                custoTotal: calc.custoTotal,
+                precoVenda: calc.precoVenda,
+                lucroEstimado: calc.lucroEstimado,
+                margemReal: calc.margemReal
+            },
             preco_venda: precoFinal,
             quantidade_estoque: parseInt(document.getElementById('prod-estoque')?.value) || 0,
             estoque_minimo: parseInt(document.getElementById('prod-estoque-min')?.value) || 0,
@@ -3666,58 +3705,60 @@ const App = (() => {
         const peso_g = volume_cm3 * densidade;
         const tempo_h = tempo_min / 60;
 
+        const calc = Calculator.calcularDetalhado({
+            peso_g,
+            tempo_min,
+            custo_kg,
+            custo_kwh,
+            consumo_w,
+            custo_hora_maq,
+            depreciacao_pc,
+            falhas_pc,
+            modelagem,
+            acabamento_pc,
+            fixacao,
+            outros,
+            margem: margem_pc
+        });
+
         setText('step-raio', raio_mm > 0 ? raio_mm.toFixed(3) + ' mm' : '—');
         setText('step-area', area_mm2 > 0 ? area_mm2.toFixed(4) + ' mm² = ' + area_cm2.toFixed(6) + ' cm²' : '—');
         setText('step-volume', volume_cm3 > 0 ? volume_cm3.toFixed(4) + ' cm³' : '—');
         setText('step-peso', peso_g > 0 ? peso_g.toFixed(2) + ' g' : '—');
-        setText('step-tempo-h', tempo_min > 0 ? tempo_min + ' min = ' + tempo_h.toFixed(3) + ' h' : '—');
+        setText('step-tempo-h', tempo_min > 0 ? tempo_min + ' min' : '—');
 
-        const custoMaterial = (peso_g / 1000) * custo_kg;
-        const energia_kwh = (consumo_w / 1000) * tempo_h;
-        const custoEnergia = energia_kwh * custo_kwh;
-        const custoDepreciacao = custo_hora_maq * tempo_h * depreciacao_pc;
-        const subtotal = custoMaterial + custoEnergia + custoDepreciacao;
-        const custoFalhas = subtotal * falhas_pc;
+        setText('step-custo-material', fmtC(calc.custoMaterial));
+        setText('step-energia-kwh', calc.energia_kwh > 0 ? calc.energia_kwh.toFixed(4) + ' kWh' : '—');
+        setText('step-custo-energia', fmtC(calc.custoEnergia));
+        setText('step-custo-depreciacao', fmtC(calc.custoDepreciacao));
+        setText('step-subtotal', fmtC(calc.subtotal));
+        setText('step-custo-falhas', fmtC(calc.custoFalhas));
 
-        setText('step-custo-material', fmtC(custoMaterial));
-        setText('step-energia-kwh', energia_kwh > 0 ? energia_kwh.toFixed(4) + ' kWh' : '—');
-        setText('step-custo-energia', fmtC(custoEnergia));
-        setText('step-custo-depreciacao', fmtC(custoDepreciacao));
-        setText('step-subtotal', fmtC(subtotal));
-        setText('step-custo-falhas', fmtC(custoFalhas));
-
-        const custoBase = subtotal + custoFalhas;
-        const custoAcabamento = custoBase * acabamento_pc;
-        const totalAdicionais = modelagem + custoAcabamento + fixacao + outros;
-
-        const custoProducao = custoBase + totalAdicionais;
-        const precoVenda = custoProducao * (1 + margem_pc);
-        const lucro = precoVenda - custoProducao;
-        const margemReal = precoVenda > 0 ? ((precoVenda - custoProducao) / precoVenda) * 100 : 0;
-
-        setText('res-material', fmtC(custoMaterial));
-        setText('res-energia', fmtC(custoEnergia));
-        setText('res-depreciacao', fmtC(custoDepreciacao));
-        setText('res-falhas', fmtC(custoFalhas));
-        setText('res-modelagem', fmtC(modelagem));
-        setText('res-acabamento', fmtC(custoAcabamento));
-        setText('res-fixacao', fmtC(fixacao));
-        setText('res-outros', fmtC(outros));
-        setText('res-custo-total', fmtC(custoProducao));
-        setText('res-preco-venda', fmtC(precoVenda));
-        setText('res-lucro', fmtC(lucro));
-        setText('res-margem-real', margemReal.toFixed(1).replace('.', ',') + '%');
+        setText('res-material', fmtC(calc.custoMaterial));
+        setText('res-energia', fmtC(calc.custoEnergia));
+        setText('res-depreciacao', fmtC(calc.custoDepreciacao));
+        setText('res-falhas', fmtC(calc.custoFalhas));
+        setText('res-modelagem', fmtC(calc.inputs.modelagem));
+        setText('res-acabamento', fmtC(calc.custoAcabamento));
+        setText('res-fixacao', fmtC(calc.inputs.fixacao));
+        setText('res-outros', fmtC(calc.inputs.outros));
+        setText('res-custo-total', fmtC(calc.custoTotal));
+        setText('res-preco-venda', fmtC(calc.precoVenda));
+        setText('res-lucro', fmtC(calc.lucroEstimado));
+        setText('res-margem-real', calc.margemReal.toFixed(1).replace('.', ',') + '%');
 
         const alertEl = document.getElementById('margin-alert');
         if (alertEl) {
-            alertEl.classList.toggle('hidden', !(custoProducao > 0 && margemReal < 20));
+            alertEl.classList.toggle('hidden', !(calc.custoTotal > 0 && calc.margemReal < 20));
         }
 
         calcAdvanced._lastResult = {
             peso_g: Calculator.round2(peso_g),
+            tempo_min: Calculator.round2(tempo_min),
             tempo_h: Calculator.round2(tempo_h),
-            custoTotal: Calculator.round2(custoProducao),
-            precoVenda: Calculator.round2(precoVenda)
+            custoTotal: calc.custoTotal,
+            precoVenda: calc.precoVenda,
+            detalhado: calc
         };
     }
 
@@ -3761,6 +3802,7 @@ const App = (() => {
                 nome,
                 descricao: '',
                 peso_g: result.peso_g,
+                tempo_min: result.tempo_min,
                 tempo_h: result.tempo_h,
                 dimensoes: { largura: 0, altura: 0, profundidade: 0 },
                 material: 'PLA',
@@ -3768,6 +3810,11 @@ const App = (() => {
                 resolucao_camada: 0.2,
                 custo_total: result.custoTotal,
                 preco_venda: result.precoVenda,
+                calculation_mode: 'detailed',
+                custos_adicionais: {
+                    material_extra: Calculator.round2(result.detalhado?.inputs?.adicional_material || 0)
+                },
+                custo_detalhado: result.detalhado,
                 quantidade_estoque: 0,
                 estoque_minimo: 0,
                 tags: [],
