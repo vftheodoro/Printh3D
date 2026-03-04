@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="css/style.css">
 
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body>
 
@@ -319,7 +319,7 @@
                 <div id="section-categories" class="section">
                     <div class="section-header">
                         <h1><i data-lucide="folder"></i> Categorias</h1>
-                        <button class="btn btn-primary" onclick="App.openCategoryModal()">
+                        <button class="btn btn-primary" id="btn-new-category" type="button">
                             <i data-lucide="plus"></i> Nova Categoria
                         </button>
                     </div>
@@ -333,10 +333,10 @@
                     <div class="section-header">
                         <h1><i data-lucide="package"></i> Produtos</h1>
                         <div style="display:flex;gap:0.5rem;">
-                            <button class="btn btn-secondary" id="btn-toggle-view" onclick="App.toggleProductView()" title="Alternar visualização">
+                            <button class="btn btn-secondary" id="btn-toggle-view" type="button" title="Alternar visualização">
                                 <i data-lucide="layout-grid"></i>
                             </button>
-                            <button class="btn btn-primary" onclick="App.openProductModal()">
+                            <button class="btn btn-primary" id="btn-new-product" type="button">
                                 <i data-lucide="plus"></i> Novo Produto
                             </button>
                         </div>
@@ -407,7 +407,7 @@
                 <div id="section-sales" class="section">
                     <div class="section-header">
                         <h1><i data-lucide="wallet"></i> Vendas</h1>
-                        <button class="btn btn-primary" onclick="App.openSaleModal()">
+                        <button class="btn btn-primary" id="btn-new-sale" type="button">
                             <i data-lucide="plus"></i> Nova Venda
                         </button>
                     </div>
@@ -427,7 +427,7 @@
                                 <option value="">Todos</option>
                             </select>
                         </div>
-                        <button class="btn btn-secondary" onclick="App.filterSales()">
+                        <button class="btn btn-secondary" id="btn-filter-sales" type="button">
                             <i data-lucide="search"></i> Filtrar
                         </button>
                     </div>
@@ -468,7 +468,7 @@
                 <div id="section-expenses" class="section">
                     <div class="section-header">
                         <h1><i data-lucide="receipt"></i> Gastos</h1>
-                        <button class="btn btn-primary" onclick="App.openExpenseModal()">
+                        <button class="btn btn-primary" id="btn-new-expense" type="button">
                             <i data-lucide="plus"></i> Novo Gasto
                         </button>
                     </div>
@@ -533,7 +533,7 @@
                 <div id="section-clients" class="section">
                     <div class="section-header">
                         <h1><i data-lucide="contact"></i> Clientes</h1>
-                        <button class="btn btn-primary" onclick="App.openClientModal()">
+                        <button class="btn btn-primary" id="btn-new-client" type="button">
                             <i data-lucide="user-plus"></i> Novo Cliente
                         </button>
                     </div>
@@ -607,7 +607,7 @@
                 <div id="section-trash" class="section admin-only">
                     <div class="section-header">
                         <h1><i data-lucide="trash"></i> Lixeira (30 dias)</h1>
-                        <button class="btn btn-secondary" onclick="App.purgeExpiredTrashNow()">
+                        <button class="btn btn-secondary" id="btn-trash-purge" type="button">
                             <i data-lucide="timer-reset"></i> Limpar expirados
                         </button>
                     </div>
@@ -642,10 +642,10 @@
 
                     <!-- Sub-navegação -->
                     <div class="sub-tabs">
-                        <button class="sub-tab active" data-subtab="promos" onclick="App.switchPromoTab('promos')">
+                        <button class="sub-tab active" data-subtab="promos" id="btn-subtab-promos" type="button">
                             <i data-lucide="tag"></i> Promoções por Produto
                         </button>
-                        <button class="sub-tab" data-subtab="coupons" onclick="App.switchPromoTab('coupons')">
+                        <button class="sub-tab" data-subtab="coupons" id="btn-subtab-coupons" type="button">
                             <i data-lucide="ticket"></i> Cupons de Desconto
                         </button>
                     </div>
@@ -654,7 +654,7 @@
                     <div id="subtab-promos" class="subtab-content active">
                         <div class="section-header" style="margin-top:1rem;">
                             <h3>Promoções Ativas e Agendadas</h3>
-                            <button class="btn btn-primary" onclick="App.openPromotionModal()">
+                            <button class="btn btn-primary" id="btn-new-promotion" type="button">
                                 <i data-lucide="plus"></i> Nova Promoção
                             </button>
                         </div>
@@ -680,7 +680,7 @@
                     <div id="subtab-coupons" class="subtab-content">
                         <div class="section-header" style="margin-top:1rem;">
                             <h3>Cupons de Desconto</h3>
-                            <button class="btn btn-primary" onclick="App.openCouponModal()">
+                            <button class="btn btn-primary" id="btn-new-coupon" type="button">
                                 <i data-lucide="plus"></i> Novo Cupom
                             </button>
                         </div>
@@ -710,13 +710,13 @@
                     <div class="section-header">
                         <h1><i data-lucide="calculator"></i> Calculadora de Custo</h1>
                         <div style="display:flex;gap:0.5rem;">
-                            <button class="btn btn-secondary" onclick="App.calcResetForm()">
+                            <button class="btn btn-secondary" id="btn-calc-reset" type="button">
                                 <i data-lucide="refresh-cw"></i> Limpar
                             </button>
-                            <button class="btn btn-secondary" onclick="App.calcRegisterSaleFromCalculator()">
+                            <button class="btn btn-secondary" id="btn-calc-sale" type="button">
                                 <i data-lucide="wallet"></i> Registrar como Venda
                             </button>
-                            <button class="btn btn-primary" onclick="App.calcSaveAsProduct()">
+                            <button class="btn btn-primary" id="btn-calc-save-product" type="button">
                                 <i data-lucide="package-plus"></i> Salvar como Produto
                             </button>
                         </div>
@@ -864,10 +864,10 @@
                                     <label>Categoria</label>
                                     <select id="adv-categoria"></select>
                                 </div>
-                                <button class="btn btn-primary" style="width:100%" onclick="App.calcSaveAsProduct()">
+                                <button class="btn btn-primary" id="btn-calc-save-product-card" type="button" style="width:100%">
                                     <i data-lucide="save"></i> Salvar no Catálogo
                                 </button>
-                                <button class="btn btn-secondary" style="width:100%;margin-top:0.5rem;" onclick="App.calcRegisterSaleFromCalculator()">
+                                <button class="btn btn-secondary" id="btn-calc-sale-card" type="button" style="width:100%;margin-top:0.5rem;">
                                     <i data-lucide="receipt"></i> Registrar Venda Personalizada
                                 </button>
                             </div>
@@ -921,7 +921,7 @@
                                 <small>Ex: 0.10 = 10%</small>
                             </div>
                         </div>
-                        <button class="btn btn-primary" onclick="App.saveSettings()">
+                        <button class="btn btn-primary" id="btn-save-settings" type="button">
                             <i data-lucide="save"></i> Salvar e Recalcular Produtos
                         </button>
                     </div>
@@ -965,7 +965,7 @@
                 <div id="section-users" class="section admin-only">
                     <div class="section-header">
                         <h1><i data-lucide="users"></i> Usuários</h1>
-                        <button class="btn btn-primary" onclick="App.openUserModal()">
+                        <button class="btn btn-primary" id="btn-new-user" type="button">
                             <i data-lucide="plus"></i> Novo Usuário
                         </button>
                     </div>
@@ -986,11 +986,11 @@
     <!-- ============================================
          MODAL GENÉRICO (multi-uso)
          ============================================ -->
-    <div id="modal-overlay" class="modal-overlay hidden">
-        <div class="modal" id="modal-container" onclick="event.stopPropagation()">
+    <div id="modal-overlay" class="modal-overlay hidden" aria-hidden="true">
+        <div class="modal" id="modal-container" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
             <div class="modal-header">
                 <h3 id="modal-title">Modal</h3>
-                <button class="modal-close" onclick="App.closeModal()">&times;</button>
+                <button class="modal-close" id="modal-close" type="button" aria-label="Fechar modal">&times;</button>
             </div>
             <div class="modal-body" id="modal-body"></div>
         </div>
@@ -999,16 +999,16 @@
     <!-- ============================================
          MODAL DE CONFIRMAÇÃO
          ============================================ -->
-    <div id="confirm-overlay" class="modal-overlay hidden">
-        <div class="modal modal-confirm" onclick="event.stopPropagation()">
+    <div id="confirm-overlay" class="modal-overlay hidden" aria-hidden="true">
+        <div class="modal modal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" tabindex="-1">
             <div class="modal-header">
                 <h3 id="confirm-title">Confirmação</h3>
             </div>
             <div class="modal-body">
                 <p id="confirm-message"></p>
                 <div class="form-actions">
-                    <button class="btn btn-secondary" id="confirm-cancel">Cancelar</button>
-                    <button class="btn btn-danger" id="confirm-ok">Confirmar</button>
+                    <button class="btn btn-secondary" id="confirm-cancel" type="button">Cancelar</button>
+                    <button class="btn btn-danger" id="confirm-ok" type="button">Confirmar</button>
                 </div>
             </div>
         </div>
@@ -1017,28 +1017,28 @@
     <!-- ============================================
          TOAST CONTAINER
          ============================================ -->
-    <div id="toast-container"></div>
+    <div id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
 
     <!-- ============================================
          SCRIPTS
          ============================================ -->
     <!-- CDN Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <!-- System Modules (dependency order) -->
-    <script src="js/database.js"></script>
-    <script src="js/storage.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/calculator.js"></script>
-    <script src="js/categories.js"></script>
-    <script src="js/promotions.js"></script>
-    <script src="js/filemanager.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/root-storage.js"></script>
-    <script src="js/app.js"></script>
+    <script defer src="js/database.js"></script>
+    <script defer src="js/storage.js"></script>
+    <script defer src="js/auth.js"></script>
+    <script defer src="js/calculator.js"></script>
+    <script defer src="js/categories.js"></script>
+    <script defer src="js/promotions.js"></script>
+    <script defer src="js/filemanager.js"></script>
+    <script defer src="js/dashboard.js"></script>
+    <script defer src="js/root-storage.js"></script>
+    <script defer src="js/app.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
