@@ -12,7 +12,6 @@ const App = (() => {
     let productViewMode = 'table'; // 'table' | 'grid'
     let searchTimeout = null;
     let _confirmResolve = null;
-    let _lastFocusedElement = null;
     let activeSuggestionType = null;
     let activeSuggestionIndex = -1;
 
@@ -78,11 +77,6 @@ const App = (() => {
     // Configura listeners de navegação
     // ------------------------------------------
     function setupNavigation() {
-        const bindClick = (id, handler) => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('click', handler);
-        };
-
         document.querySelectorAll('[data-section]').forEach(link => {
             link.addEventListener('click', e => {
                 e.preventDefault();
@@ -193,26 +187,6 @@ const App = (() => {
 
         const backdrop = document.getElementById('sidebar-backdrop');
         if (backdrop) backdrop.addEventListener('click', closeMobileSidebar);
-
-        bindClick('btn-new-category', () => openCategoryModal());
-        bindClick('btn-toggle-view', () => toggleProductView());
-        bindClick('btn-new-product', () => openProductModal());
-        bindClick('btn-new-sale', () => openSaleModal());
-        bindClick('btn-filter-sales', () => filterSales());
-        bindClick('btn-new-expense', () => openExpenseModal());
-        bindClick('btn-new-client', () => openClientModal());
-        bindClick('btn-trash-purge', () => purgeExpiredTrashNow());
-        bindClick('btn-subtab-promos', () => switchPromoTab('promos'));
-        bindClick('btn-subtab-coupons', () => switchPromoTab('coupons'));
-        bindClick('btn-new-promotion', () => openPromotionModal());
-        bindClick('btn-new-coupon', () => openCouponModal());
-        bindClick('btn-calc-reset', () => calcResetForm());
-        bindClick('btn-calc-sale', () => calcRegisterSaleFromCalculator());
-        bindClick('btn-calc-save-product', () => calcSaveAsProduct());
-        bindClick('btn-calc-save-product-card', () => calcSaveAsProduct());
-        bindClick('btn-calc-sale-card', () => calcRegisterSaleFromCalculator());
-        bindClick('btn-save-settings', () => saveSettings());
-        bindClick('btn-new-user', () => openUserModal());
     }
 
     // ------------------------------------------
@@ -222,31 +196,15 @@ const App = (() => {
         document.getElementById('modal-overlay').addEventListener('click', e => {
             if (e.target === e.currentTarget) closeModal();
         });
-        document.getElementById('modal-close')?.addEventListener('click', () => closeModal());
         document.getElementById('confirm-overlay')?.addEventListener('click', e => {
             if (e.target === e.currentTarget) resolveConfirm(false);
         });
         document.getElementById('confirm-cancel')?.addEventListener('click', () => resolveConfirm(false));
         document.getElementById('confirm-ok')?.addEventListener('click', () => resolveConfirm(true));
         document.addEventListener('keydown', e => {
-            const modalOpen = isOverlayOpen('modal-overlay');
-            const confirmOpen = isOverlayOpen('confirm-overlay');
-
-            if (e.key === 'Tab') {
-                if (confirmOpen) {
-                    trapFocusIn(document.querySelector('#confirm-overlay .modal-confirm'), e);
-                } else if (modalOpen) {
-                    trapFocusIn(document.getElementById('modal-container'), e);
-                }
-                return;
-            }
-
             if (e.key === 'Escape') {
-                if (confirmOpen) {
-                    resolveConfirm(false);
-                } else if (modalOpen) {
-                    closeModal();
-                }
+                closeModal();
+                resolveConfirm(false);
                 hideAllSearchSuggestions();
             }
         });
@@ -484,72 +442,6 @@ const App = (() => {
         document.getElementById('sidebar-backdrop').classList.remove('active');
     }
 
-    function isOverlayOpen(overlayId) {
-        const overlay = document.getElementById(overlayId);
-        return !!overlay && !overlay.classList.contains('hidden');
-    }
-
-    function rememberFocusTarget() {
-        const active = document.activeElement;
-        if (active && typeof active.focus === 'function') {
-            _lastFocusedElement = active;
-        }
-    }
-
-    function restoreFocusTarget() {
-        if (_lastFocusedElement && typeof _lastFocusedElement.focus === 'function') {
-            _lastFocusedElement.focus();
-        }
-        _lastFocusedElement = null;
-    }
-
-    function getFocusableElements(container) {
-        if (!container) return [];
-        const selector = [
-            'a[href]',
-            'button:not([disabled])',
-            'input:not([disabled]):not([type="hidden"])',
-            'select:not([disabled])',
-            'textarea:not([disabled])',
-            '[tabindex]:not([tabindex="-1"])'
-        ].join(',');
-        return Array.from(container.querySelectorAll(selector))
-            .filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
-    }
-
-    function focusFirstIn(container) {
-        if (!container) return;
-        const focusable = getFocusableElements(container);
-        if (focusable.length > 0) {
-            focusable[0].focus();
-            return;
-        }
-        if (typeof container.focus === 'function') container.focus();
-    }
-
-    function trapFocusIn(container, event) {
-        const focusable = getFocusableElements(container);
-        if (focusable.length === 0) {
-            event.preventDefault();
-            if (typeof container.focus === 'function') container.focus();
-            return;
-        }
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        const active = document.activeElement;
-
-        if (event.shiftKey) {
-            if (active === first || !container.contains(active)) {
-                event.preventDefault();
-                last.focus();
-            }
-        } else if (active === last || !container.contains(active)) {
-            event.preventDefault();
-            first.focus();
-        }
-    }
-
     async function initRootStorageStartupFlow() {
         if (typeof RootStorage === 'undefined') return;
         if (!Auth.isAdmin()) return;
@@ -644,29 +536,18 @@ const App = (() => {
 
     function confirmDialog(title, message) {
         return new Promise(resolve => {
-            if (!isOverlayOpen('modal-overlay') && !isOverlayOpen('confirm-overlay')) {
-                rememberFocusTarget();
-            }
             _confirmResolve = resolve;
             document.getElementById('confirm-title').textContent = title;
             document.getElementById('confirm-message').textContent = message;
-            const overlay = document.getElementById('confirm-overlay');
-            overlay.classList.remove('hidden');
-            overlay.setAttribute('aria-hidden', 'false');
-            focusFirstIn(document.querySelector('#confirm-overlay .modal-confirm'));
+            document.getElementById('confirm-overlay').classList.remove('hidden');
         });
     }
 
     function resolveConfirm(val) {
-        const overlay = document.getElementById('confirm-overlay');
-        overlay?.classList.add('hidden');
-        overlay?.setAttribute('aria-hidden', 'true');
+        document.getElementById('confirm-overlay')?.classList.add('hidden');
         if (_confirmResolve) {
             _confirmResolve(val);
             _confirmResolve = null;
-        }
-        if (!isOverlayOpen('modal-overlay')) {
-            restoreFocusTarget();
         }
     }
 
@@ -717,32 +598,21 @@ const App = (() => {
     // ==========================================
 
     function openModal(title, bodyHtml, wide) {
-        if (!isOverlayOpen('modal-overlay') && !isOverlayOpen('confirm-overlay')) {
-            rememberFocusTarget();
-        }
         document.getElementById('modal-title').textContent = title;
         document.getElementById('modal-body').innerHTML = bodyHtml;
         const container = document.getElementById('modal-container');
         if (container) container.classList.toggle('modal-wide', !!wide);
-        const overlay = document.getElementById('modal-overlay');
-        overlay.classList.remove('hidden');
-        overlay.setAttribute('aria-hidden', 'false');
+        document.getElementById('modal-overlay').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
         if (typeof lucide !== 'undefined') lucide.createIcons();
-        focusFirstIn(container);
     }
 
     function closeModal() {
-        const overlay = document.getElementById('modal-overlay');
-        overlay.classList.add('hidden');
-        overlay.setAttribute('aria-hidden', 'true');
+        document.getElementById('modal-overlay').classList.add('hidden');
         document.body.style.overflow = '';
         editingProductId = null;
         editingUserId = null;
         editingClientId = null;
-        if (!isOverlayOpen('confirm-overlay')) {
-            restoreFocusTarget();
-        }
     }
 
     // ==========================================

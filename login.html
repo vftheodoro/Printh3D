@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="css/style.css">
 
     <!-- Lucide Icons -->
-    <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body>
 
@@ -54,8 +54,7 @@
                 </div>
 
                 <!-- Mensagem de erro -->
-                <div id="login-error" class="login-error" role="alert" aria-live="assertive"></div>
-                <div id="login-feedback" class="login-info" role="status" aria-live="polite" style="display:none;"></div>
+                <div id="login-error" class="login-error"></div>
 
                 <button type="submit" class="btn btn-primary">
                     <i data-lucide="lock"></i> Entrar
@@ -80,147 +79,110 @@
 
     <!-- ===== SCRIPTS ===== -->
     <!-- SHA-256 para hash de senhas -->
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     <!-- SheetJS para manipulação de Excel -->
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Módulos do sistema -->
-    <script defer src="js/database.js"></script>
-    <script defer src="js/storage.js"></script>
-    <script defer src="js/auth.js"></script>
+    <script src="js/database.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/auth.js"></script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const loginForm = document.getElementById('login-form');
-            const loginButton = loginForm.querySelector('button[type="submit"]');
-            const passwordInput = document.getElementById('login-password');
-            const togglePasswordBtn = document.getElementById('toggle-password-btn');
-            const errorEl = document.getElementById('login-error');
-            const feedbackEl = document.getElementById('login-feedback');
-            const importBtn = document.getElementById('btn-import-db');
-            const importInput = document.getElementById('file-import-login');
+        const loginForm = document.getElementById('login-form');
+        const loginButton = loginForm.querySelector('button[type="submit"]');
+        const passwordInput = document.getElementById('login-password');
+        const togglePasswordBtn = document.getElementById('toggle-password-btn');
+        const errorEl = document.getElementById('login-error');
 
-            let passwordVisible = false;
+        let passwordVisible = false;
 
-            function renderIcons() {
-                if (typeof lucide !== 'undefined') {
-                    lucide.createIcons();
-                }
-            }
+        function setPasswordVisibility(visible) {
+            passwordVisible = visible;
+            passwordInput.type = visible ? 'text' : 'password';
+            togglePasswordBtn.innerHTML = visible
+                ? '<i data-lucide="eye-off"></i>'
+                : '<i data-lucide="eye"></i>';
+            togglePasswordBtn.setAttribute('aria-label', visible ? 'Ocultar senha' : 'Mostrar senha');
+            togglePasswordBtn.setAttribute('title', visible ? 'Ocultar senha' : 'Mostrar senha');
+            lucide.createIcons();
+        }
 
-            function showError(message) {
-                if (!errorEl) return;
-                errorEl.textContent = message;
+        async function bootstrapLogin() {
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<i data-lucide="loader-2"></i> Carregando...';
+            lucide.createIcons();
+
+            try {
+                await Storage.init();
+            } catch (err) {
+                errorEl.textContent = 'Falha ao inicializar o sistema: ' + err.message;
                 errorEl.style.display = 'block';
+                return;
             }
 
-            function clearError() {
-                if (!errorEl) return;
-                errorEl.textContent = '';
-                errorEl.style.display = 'none';
+            if (Auth.isLoggedIn()) {
+                window.location.href = 'index.html';
+                return;
             }
 
-            function showFeedback(message) {
-                if (!feedbackEl) return;
-                feedbackEl.textContent = message;
-                feedbackEl.style.display = 'block';
+            loginButton.disabled = false;
+            loginButton.innerHTML = '<i data-lucide="lock"></i> Entrar';
+            lucide.createIcons();
+        }
+
+        // Inicializa ícones Lucide
+        lucide.createIcons();
+        setPasswordVisibility(false);
+
+        // Inicializa banco e libera login
+        bootstrapLogin();
+
+        // === Handler do formulário de login ===
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('login-email').value.trim();
+            const password = passwordInput.value;
+
+            const result = Auth.login(email, password);
+
+            if (result.success) {
+                window.location.href = 'index.html';
+            } else {
+                errorEl.textContent = result.message;
+                errorEl.style.display = 'block';
+
+                const card = document.getElementById('login-card');
+                card.style.animation = 'none';
+                card.offsetHeight;
+                card.style.animation = 'shake 0.5s ease';
+            }
+        });
+
+        // === Mostrar/Ocultar senha ===
+        togglePasswordBtn.addEventListener('click', function() {
+            setPasswordVisibility(!passwordVisible);
+            passwordInput.focus();
+        });
+
+        // === Importar banco de dados ===
+        document.getElementById('btn-import-db').addEventListener('click', function() {
+            document.getElementById('file-import-login').click();
+        });
+
+        document.getElementById('file-import-login').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                await Storage.importExcel(file);
+                alert('Base de dados importada com sucesso!\nFaça login para continuar.');
+            } catch (err) {
+                alert('Erro ao importar: ' + err.message);
             }
 
-            function hideFeedback() {
-                if (!feedbackEl) return;
-                feedbackEl.textContent = '';
-                feedbackEl.style.display = 'none';
-            }
-
-            function setPasswordVisibility(visible) {
-                passwordVisible = visible;
-                passwordInput.type = visible ? 'text' : 'password';
-                togglePasswordBtn.innerHTML = visible
-                    ? '<i data-lucide="eye-off"></i>'
-                    : '<i data-lucide="eye"></i>';
-                togglePasswordBtn.setAttribute('aria-label', visible ? 'Ocultar senha' : 'Mostrar senha');
-                togglePasswordBtn.setAttribute('title', visible ? 'Ocultar senha' : 'Mostrar senha');
-                renderIcons();
-            }
-
-            async function bootstrapLogin() {
-                loginButton.disabled = true;
-                loginButton.innerHTML = '<i data-lucide="loader-2"></i> Carregando...';
-                renderIcons();
-
-                try {
-                    await Storage.init();
-                } catch (err) {
-                    showError('Falha ao inicializar o sistema: ' + err.message);
-                    return;
-                }
-
-                if (Auth.isLoggedIn()) {
-                    window.location.href = 'index.html';
-                    return;
-                }
-
-                loginButton.disabled = false;
-                loginButton.innerHTML = '<i data-lucide="lock"></i> Entrar';
-                renderIcons();
-            }
-
-            renderIcons();
-            setPasswordVisibility(false);
-            bootstrapLogin();
-
-            loginForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                hideFeedback();
-
-                const email = document.getElementById('login-email').value.trim();
-                const password = passwordInput.value;
-
-                const result = Auth.login(email, password);
-
-                if (result.success) {
-                    window.location.href = 'index.html';
-                } else {
-                    showError(result.message);
-
-                    const card = document.getElementById('login-card');
-                    card.style.animation = 'none';
-                    card.offsetHeight;
-                    card.style.animation = 'shake 0.5s ease';
-                }
-            });
-
-            togglePasswordBtn.addEventListener('click', function() {
-                setPasswordVisibility(!passwordVisible);
-                passwordInput.focus();
-            });
-
-            importBtn.addEventListener('click', function() {
-                importInput.click();
-            });
-
-            importInput.addEventListener('change', async function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                clearError();
-                hideFeedback();
-                importBtn.disabled = true;
-                importBtn.innerHTML = '<i data-lucide="loader-2"></i> Importando...';
-                renderIcons();
-
-                try {
-                    await Storage.importExcel(file);
-                    showFeedback('Base de dados importada com sucesso. Faça login para continuar.');
-                } catch (err) {
-                    showError('Erro ao importar: ' + err.message);
-                } finally {
-                    importBtn.disabled = false;
-                    importBtn.innerHTML = '<i data-lucide="upload"></i> Importar Base de Dados';
-                    renderIcons();
-                }
-
-                e.target.value = '';
-            });
+            // Limpa input para permitir re-importação do mesmo arquivo
+            e.target.value = '';
         });
     </script>
 
