@@ -7,7 +7,7 @@ const FileManager = (() => {
 
     const ACCEPTED_TYPES = {
         image: ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'],
-        model3d: ['.stl', '.obj', '.3mf', '.step', '.stp'],
+        model3d: ['.stl', '.obj', '.3mf', '.step', '.stp', '.zip', '.rar'],
         document: ['.pdf', '.doc', '.docx', '.txt']
     };
 
@@ -216,7 +216,7 @@ const FileManager = (() => {
                 <input type="file" id="file-upload-input" multiple hidden
                        accept="${getAllAcceptedExtensions()}"
                        onchange="FileManager.handleFileSelect(event, ${productId})">
-                <small>Imagens, STL, OBJ, 3MF, PDF (máx. 50MB por arquivo)</small>
+                <small>Imagens, STL/OBJ/3MF, ZIP/RAR de STLs e documentos (máx. 50MB por arquivo)</small>
             </div>
             <div id="upload-progress" class="upload-progress hidden"></div>
         `;

@@ -1201,11 +1201,28 @@ const App = (() => {
         const socialGeral = social.geral || social.instagram || social.facebook || social.whatsapp || social.tiktok || '';
         const pTempoMin = Calculator.resolveTempoMinutos(p.tempo_min, p.tempo_h);
         const materialExtra = Number(p.custos_adicionais?.material_extra || 0);
+        const settings = Calculator.getSettings();
+        const detailInputs = p.custo_detalhado?.inputs || {};
+        const slicer = p.slicer_config || {};
+        const calcMode = p.calculation_mode === 'detailed' ? 'detailed' : 'basic';
+        const advCustoKg = Number(detailInputs.custo_kg ?? settings.custo_kg ?? 0);
+        const advCustoKwh = Number(detailInputs.custo_kwh ?? settings.custo_kwh ?? 0);
+        const advConsumoW = Number(detailInputs.consumo_w ?? settings.consumo_maquina_w ?? 350);
+        const advCustoHora = Number(detailInputs.custo_hora_maq ?? settings.custo_hora_maquina ?? 0);
+        const advDepreciacao = Number((detailInputs.depreciacao_pc ?? settings.depreciacao_percentual ?? 0) * 100);
+        const advFalhas = Number((detailInputs.falhas_pc ?? settings.percentual_falha ?? 0) * 100);
+        const advModelagem = Number(detailInputs.modelagem ?? 0);
+        const advAcabamento = Number((detailInputs.acabamento_pc ?? 0) * 100);
+        const advFixacao = Number(detailInputs.fixacao ?? 0);
+        const advOutros = Number(detailInputs.outros ?? 0);
+        const advMargem = Number((detailInputs.margem ?? settings.margem_padrao ?? 0) * 100);
+        const advManualPrice = Number(p.preco_venda || 0);
 
         const html = `
         <div class="modal-tabs">
             <button class="modal-tab active" onclick="App.switchProductTab('tab-basic')">Básico</button>
             <button class="modal-tab" onclick="App.switchProductTab('tab-details')">Detalhes</button>
+            <button class="modal-tab ${calcMode === 'detailed' ? '' : 'hidden'}" id="tab-btn-advanced-calc" onclick="App.switchProductTab('tab-advanced-calc')">Cálculo Avançado</button>
             <button class="modal-tab" onclick="App.switchProductTab('tab-stock')">Estoque</button>
             ${id ? '<button class="modal-tab" onclick="App.switchProductTab(\'tab-files\')">Arquivos</button>' : ''}
             <button class="modal-tab" onclick="App.switchProductTab('tab-social')">Redes Sociais</button>
@@ -1271,6 +1288,20 @@ const App = (() => {
                         <input type="number" id="prod-preco" value="${p.preco_venda || ''}" step="0.01" min="0" placeholder="Auto" oninput="App.calcProductPreview()">
                         <small>Deixe vazio para calcular automático</small>
                     </div>
+                    <div class="form-group">
+                        <label>Modo de Cálculo</label>
+                        <select id="prod-calc-mode" onchange="App.onProductCalcModeChange(); App.calcProductPreview();">
+                            <option value="basic" ${calcMode === 'basic' ? 'selected' : ''}>Simplificado</option>
+                            <option value="detailed" ${calcMode === 'detailed' ? 'selected' : ''}>Avançado (igual calculadora)</option>
+                        </select>
+                        <small>No modo avançado, o cálculo usa os mesmos parâmetros da calculadora principal.</small>
+                    </div>
+                </div>
+                <div id="prod-advanced-fields" class="${calcMode === 'detailed' ? '' : 'hidden'}" style="margin-bottom:1rem;">
+                    <p class="text-muted" style="font-size:0.82rem;margin-bottom:0.5rem;">Modo avançado ativo. Preencha os dados na aba <strong>Cálculo Avançado</strong>.</p>
+                    <button type="button" class="btn btn-secondary" onclick="App.switchProductTab('tab-advanced-calc')">
+                        <i data-lucide="calculator"></i> Abrir Cálculo Avançado do Produto
+                    </button>
                 </div>
                 <div id="calc-preview" class="calc-preview" style="display:none;">
                     <h4><i data-lucide="bar-chart-3"></i> Simulação de Custo</h4>
@@ -1290,6 +1321,50 @@ const App = (() => {
                 <div class="form-group" style="display:flex;align-items:center;gap:0.75rem;">
                     <input type="checkbox" id="prod-ativo" ${p.ativo !== false ? 'checked' : ''}>
                     <label for="prod-ativo" style="margin:0;cursor:pointer;">Produto ativo</label>
+                </div>
+            </div>
+
+            <!-- TAB: Cálculo Avançado do Produto -->
+            <div class="modal-tab-content" id="tab-advanced-calc">
+                <p class="text-muted" style="font-size:0.82rem;margin-bottom:0.8rem;">Página de cálculo avançado específica deste produto. As informações são salvas junto com o produto.</p>
+
+                <h4 style="margin-bottom:0.45rem;"><i data-lucide="sliders-horizontal"></i> Parâmetros de Cálculo (igual calculadora)</h4>
+                <div class="form-grid">
+                    <div class="form-group"><label>Valor do Kg de Filamento (R$)</label><input type="number" id="prod-adv-custo-kg" value="${advCustoKg}" step="0.01" min="0" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Preço kWh (R$)</label><input type="number" id="prod-adv-custo-kwh" value="${advCustoKwh}" step="0.01" min="0" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Consumo da Máquina (W)</label><input type="number" id="prod-adv-consumo-w" value="${advConsumoW}" step="1" min="0" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Custo Hora Máquina (R$)</label><input type="number" id="prod-adv-custo-hora" value="${advCustoHora}" step="0.01" min="0" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Depreciação (%)</label><input type="number" id="prod-adv-depreciacao" value="${advDepreciacao}" step="0.1" min="0" max="100" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Média de Falhas (%)</label><input type="number" id="prod-adv-falhas" value="${advFalhas}" step="0.1" min="0" max="100" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Modelagem 3D (R$)</label><input type="number" id="prod-adv-modelagem" value="${advModelagem}" step="0.01" min="0" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Acabamento (%)</label><input type="number" id="prod-adv-acabamento" value="${advAcabamento}" step="0.1" min="0" max="100" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Fixação / Cola (R$)</label><input type="number" id="prod-adv-fixacao" value="${advFixacao}" step="0.01" min="0" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Outros Custos (R$)</label><input type="number" id="prod-adv-outros" value="${advOutros}" step="0.01" min="0" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Margem de Lucro (%)</label><input type="number" id="prod-adv-margem" value="${advMargem}" step="0.1" min="0" max="500" oninput="App.calcProductPreview()"></div>
+                    <div class="form-group"><label>Preço de Venda Manual (R$)</label><input type="number" id="prod-adv-preco-manual" value="${advManualPrice || ''}" step="0.01" min="0" oninput="App.syncProductAdvancedManualPrice(); App.calcProductPreview();"></div>
+                </div>
+
+                <h4 style="margin:0.7rem 0 0.45rem;"><i data-lucide="settings-2"></i> Dados do Fatiador</h4>
+                <div class="form-grid">
+                    <div class="form-group"><label>Software de Fatiamento</label><input type="text" id="prod-slicer-software" value="${escapeHtml(slicer.software || '')}" placeholder="Ex: Cura, PrusaSlicer"></div>
+                    <div class="form-group"><label>Altura de Camada (mm)</label><input type="number" id="prod-slicer-layer-height" value="${slicer.layer_height_mm || ''}" step="0.01" min="0"></div>
+                    <div class="form-group"><label>Preenchimento (%)</label><input type="number" id="prod-slicer-infill" value="${slicer.infill_percent || ''}" step="1" min="0" max="100"></div>
+                    <div class="form-group"><label>Velocidade (mm/s)</label><input type="number" id="prod-slicer-speed" value="${slicer.speed_mms || ''}" step="1" min="0"></div>
+                    <div class="form-group"><label>Paredes</label><input type="number" id="prod-slicer-walls" value="${slicer.walls_count || ''}" step="1" min="0"></div>
+                    <div class="form-group"><label>Bico (mm)</label><input type="number" id="prod-slicer-nozzle" value="${slicer.nozzle_mm || ''}" step="0.01" min="0"></div>
+                    <div class="form-group"><label>Temperatura Nozzle (°C)</label><input type="number" id="prod-slicer-nozzle-temp" value="${slicer.nozzle_temp_c || ''}" step="1" min="0"></div>
+                    <div class="form-group"><label>Temperatura Mesa (°C)</label><input type="number" id="prod-slicer-bed-temp" value="${slicer.bed_temp_c || ''}" step="1" min="0"></div>
+                    <div class="form-group" style="display:flex;align-items:center;gap:0.6rem;"><input type="checkbox" id="prod-slicer-supports" ${slicer.supports ? 'checked' : ''}><label for="prod-slicer-supports" style="margin:0;cursor:pointer;">Usa suportes</label></div>
+                </div>
+
+                <div id="prod-adv-summary" class="calc-preview" style="display:block;">
+                    <h4><i data-lucide="target"></i> Resultado do Cálculo Avançado</h4>
+                    <div class="calc-grid">
+                        <div class="calc-item"><span>Custo Total</span><span id="prod-adv-res-custo">—</span></div>
+                        <div class="calc-item success"><span>Preço Calculado</span><span id="prod-adv-res-preco">—</span></div>
+                        <div class="calc-item"><span>Margem Calculada</span><span id="prod-adv-res-margem">—</span></div>
+                        <div class="calc-item"><span>Margem com Preço Manual</span><span id="prod-adv-res-margem-manual">—</span></div>
+                    </div>
                 </div>
             </div>
 
@@ -1378,6 +1453,7 @@ const App = (() => {
 
         // If editing, show calc preview and load files
         toggleVariationFields();
+        onProductCalcModeChange();
         if (product) {
             setTimeout(() => calcProductPreview(), 50);
             if (id) await refreshProductFiles(id);
@@ -1401,6 +1477,25 @@ const App = (() => {
         });
     }
 
+    function showProductValidationError(fieldId, message) {
+        const field = fieldId ? document.getElementById(fieldId) : null;
+        const tabContent = field?.closest('.modal-tab-content');
+        if (tabContent?.id) {
+            switchProductTab(tabContent.id);
+        } else {
+            switchProductTab('tab-basic');
+        }
+
+        if (field) {
+            field.focus();
+            if (typeof field.reportValidity === 'function') {
+                field.reportValidity();
+            }
+        }
+
+        showToast(message || 'Revise os campos obrigatórios antes de salvar.', 'warning');
+    }
+
     async function onCategoryChange() {
         const catId = parseInt(document.getElementById('prod-category')?.value);
         if (!catId || editingProductId) return;
@@ -1418,6 +1513,64 @@ const App = (() => {
         if (wrapper) wrapper.classList.toggle('hidden', !isVariation);
         if (parentSelect) parentSelect.required = isVariation;
         if (variationLabel) variationLabel.required = isVariation;
+    }
+
+    function onProductCalcModeChange() {
+        const mode = document.getElementById('prod-calc-mode')?.value || 'basic';
+        const advWrapper = document.getElementById('prod-advanced-fields');
+        if (advWrapper) advWrapper.classList.toggle('hidden', mode !== 'detailed');
+        const advTabBtn = document.getElementById('tab-btn-advanced-calc');
+        if (advTabBtn) advTabBtn.classList.toggle('hidden', mode !== 'detailed');
+        if (mode === 'detailed') {
+            switchProductTab('tab-advanced-calc');
+        }
+    }
+
+    function syncProductAdvancedManualPrice() {
+        const manualPrice = parseFloat(document.getElementById('prod-adv-preco-manual')?.value);
+        const priceInput = document.getElementById('prod-preco');
+        if (!priceInput) return;
+        if (Number.isFinite(manualPrice) && manualPrice > 0) {
+            priceInput.value = String(manualPrice);
+        }
+    }
+
+    function getProductCalculationMode() {
+        return document.getElementById('prod-calc-mode')?.value === 'detailed' ? 'detailed' : 'basic';
+    }
+
+    function buildProductCalculation({ peso_g, tempo_min, materialExtra }) {
+        const mode = getProductCalculationMode();
+        if (mode === 'detailed') {
+            return {
+                mode,
+                calc: Calculator.calcularDetalhado({
+                    peso_g,
+                    tempo_min,
+                    custo_kg: Math.max(0, parseFloat(document.getElementById('prod-adv-custo-kg')?.value) || 0),
+                    custo_kwh: Math.max(0, parseFloat(document.getElementById('prod-adv-custo-kwh')?.value) || 0),
+                    consumo_w: Math.max(0, parseFloat(document.getElementById('prod-adv-consumo-w')?.value) || 0),
+                    custo_hora_maq: Math.max(0, parseFloat(document.getElementById('prod-adv-custo-hora')?.value) || 0),
+                    depreciacao_pc: Math.max(0, parseFloat(document.getElementById('prod-adv-depreciacao')?.value) || 0) / 100,
+                    falhas_pc: Math.max(0, parseFloat(document.getElementById('prod-adv-falhas')?.value) || 0) / 100,
+                    modelagem: Math.max(0, parseFloat(document.getElementById('prod-adv-modelagem')?.value) || 0),
+                    acabamento_pc: Math.max(0, parseFloat(document.getElementById('prod-adv-acabamento')?.value) || 0) / 100,
+                    fixacao: Math.max(0, parseFloat(document.getElementById('prod-adv-fixacao')?.value) || 0),
+                    outros: Math.max(0, parseFloat(document.getElementById('prod-adv-outros')?.value) || 0),
+                    margem: Math.max(0, parseFloat(document.getElementById('prod-adv-margem')?.value) || 0) / 100,
+                    adicional_material: materialExtra
+                })
+            };
+        }
+
+        return {
+            mode,
+            calc: Calculator.calcularDetalhado({
+                peso_g,
+                tempo_min,
+                adicional_material: materialExtra
+            })
+        };
     }
 
     async function onVariationParentChange() {
@@ -1452,10 +1605,10 @@ const App = (() => {
             if (previewEl) previewEl.style.display = 'none';
             return;
         }
-        const calc = Calculator.calcularDetalhado({
+        const { calc } = buildProductCalculation({
             peso_g: peso,
             tempo_min: tempoMin,
-            adicional_material: materialExtra
+            materialExtra
         });
         if (previewEl) previewEl.style.display = 'block';
         setText('calc-material', fmtC(calc.custoMaterial));
@@ -1473,49 +1626,92 @@ const App = (() => {
             margemEl.textContent = margin.toFixed(1) + '%';
             margemEl.className = margin < 20 ? 'text-danger' : 'text-success';
         }
+
+        const advCostEl = document.getElementById('prod-adv-res-custo');
+        const advPriceEl = document.getElementById('prod-adv-res-preco');
+        const advMarginEl = document.getElementById('prod-adv-res-margem');
+        const advManualMarginEl = document.getElementById('prod-adv-res-margem-manual');
+        if (advCostEl) advCostEl.textContent = fmtC(calc.custoTotal);
+        if (advPriceEl) advPriceEl.textContent = fmtC(calc.precoVenda);
+        if (advMarginEl) advMarginEl.textContent = calc.margemReal.toFixed(1) + '%';
+
+        const manualPrice = parseFloat(document.getElementById('prod-adv-preco-manual')?.value);
+        if (advManualMarginEl) {
+            if (Number.isFinite(manualPrice) && manualPrice > 0) {
+                const manualMargin = ((manualPrice - calc.custoTotal) / manualPrice) * 100;
+                advManualMarginEl.textContent = manualMargin.toFixed(1) + '%';
+                advManualMarginEl.className = manualMargin < 20 ? 'text-danger' : 'text-success';
+            } else {
+                advManualMarginEl.textContent = '—';
+                advManualMarginEl.className = '';
+            }
+        }
     }
 
     async function saveProduct() {
+        const form = document.getElementById('product-form');
+        if (form) {
+            const firstInvalid = Array.from(form.querySelectorAll('input, select, textarea'))
+                .find(el => typeof el.checkValidity === 'function' && !el.checkValidity());
+            if (firstInvalid) {
+                showProductValidationError(firstInvalid.id, 'Há campos inválidos. Corrija para salvar o produto.');
+                return;
+            }
+        }
+
         const nome = document.getElementById('prod-nome')?.value.trim();
         const peso_g = parseFloat(document.getElementById('prod-peso')?.value);
         const tempo_min = parseFloat(document.getElementById('prod-tempo-min')?.value);
         const category_id = parseInt(document.getElementById('prod-category')?.value);
         const sku = document.getElementById('prod-sku')?.value.trim().toUpperCase();
         const materialExtra = Math.max(0, parseFloat(document.getElementById('prod-material-extra')?.value) || 0);
+        const calcMode = getProductCalculationMode();
         const isVariation = document.getElementById('prod-is-variation')?.checked === true;
         const variationParentId = parseInt(document.getElementById('prod-parent-product')?.value) || null;
         const variationLabel = document.getElementById('prod-variation-label')?.value.trim() || '';
 
-        if (!nome) { showToast('Informe o nome do produto.', 'warning'); return; }
-        if (!peso_g || peso_g <= 0) { showToast('Informe um peso válido.', 'warning'); return; }
-        if (!tempo_min || tempo_min <= 0) { showToast('Informe um tempo válido em minutos.', 'warning'); return; }
-        if (!sku) { showToast('Informe o código SKU.', 'warning'); return; }
-        if (isVariation && !variationParentId) { showToast('Selecione o produto base da variação.', 'warning'); return; }
-        if (isVariation && !variationLabel) { showToast('Informe o rótulo da variação.', 'warning'); return; }
+        if (!nome) { showProductValidationError('prod-nome', 'Informe o nome do produto.'); return; }
+        if (!peso_g || peso_g <= 0) { showProductValidationError('prod-peso', 'Informe um peso válido.'); return; }
+        if (!tempo_min || tempo_min <= 0) { showProductValidationError('prod-tempo-min', 'Informe um tempo válido em minutos.'); return; }
+        if (!sku) { showProductValidationError('prod-sku', 'Informe o código SKU.'); return; }
+        if (!category_id || Number.isNaN(category_id)) { showProductValidationError('prod-category', 'Selecione uma categoria válida.'); return; }
+        if (isVariation && !variationParentId) { showProductValidationError('prod-parent-product', 'Selecione o produto base da variação.'); return; }
+        if (isVariation && !variationLabel) { showProductValidationError('prod-variation-label', 'Informe o rótulo da variação.'); return; }
         if (isVariation && editingProductId && Number(variationParentId) === Number(editingProductId)) {
-            showToast('Um produto não pode ser variação dele mesmo.', 'warning');
+            showProductValidationError('prod-parent-product', 'Um produto não pode ser variação dele mesmo.');
             return;
         }
 
         let finalCategoryId = category_id || null;
         if (isVariation && variationParentId) {
             const baseProduct = await Database.getById(Database.STORES.PRODUCTS, variationParentId);
-            if (!baseProduct) { showToast('Produto base da variação não encontrado.', 'danger'); return; }
+            if (!baseProduct) { showProductValidationError('prod-parent-product', 'Produto base da variação não encontrado.'); return; }
             finalCategoryId = baseProduct.category_id || finalCategoryId;
         }
 
         // Check SKU uniqueness
         const skuUnique = await Database.isSkuUnique(sku, editingProductId);
-        if (!skuUnique) { showToast('Este SKU já está em uso.', 'danger'); return; }
+        if (!skuUnique) { showProductValidationError('prod-sku', 'Este SKU já está em uso.'); return; }
 
-        const calc = Calculator.calcularDetalhado({
+        const { calc } = buildProductCalculation({
             peso_g,
             tempo_min,
-            adicional_material: materialExtra
+            materialExtra
         });
         const customPrice = parseFloat(document.getElementById('prod-preco')?.value);
         const precoFinal = (customPrice && customPrice > 0) ? customPrice : calc.precoVenda;
         const socialGeral = document.getElementById('prod-social-geral')?.value || '';
+        const slicerConfig = {
+            software: document.getElementById('prod-slicer-software')?.value.trim() || '',
+            layer_height_mm: parseFloat(document.getElementById('prod-slicer-layer-height')?.value) || 0,
+            infill_percent: parseFloat(document.getElementById('prod-slicer-infill')?.value) || 0,
+            speed_mms: parseFloat(document.getElementById('prod-slicer-speed')?.value) || 0,
+            walls_count: parseFloat(document.getElementById('prod-slicer-walls')?.value) || 0,
+            nozzle_mm: parseFloat(document.getElementById('prod-slicer-nozzle')?.value) || 0,
+            nozzle_temp_c: parseFloat(document.getElementById('prod-slicer-nozzle-temp')?.value) || 0,
+            bed_temp_c: parseFloat(document.getElementById('prod-slicer-bed-temp')?.value) || 0,
+            supports: document.getElementById('prod-slicer-supports')?.checked === true
+        };
 
         const data = {
             codigo_sku: sku,
@@ -1537,7 +1733,7 @@ const App = (() => {
             cor: document.getElementById('prod-cor')?.value.trim() || '',
             resolucao_camada: parseFloat(document.getElementById('prod-resolucao')?.value) || 0.2,
             custo_total: calc.custoTotal,
-            calculation_mode: 'basic',
+            calculation_mode: calcMode,
             custos_adicionais: {
                 material_extra: Calculator.round2(materialExtra)
             },
@@ -1559,6 +1755,7 @@ const App = (() => {
                 lucroEstimado: calc.lucroEstimado,
                 margemReal: calc.margemReal
             },
+            slicer_config: calcMode === 'detailed' ? slicerConfig : null,
             preco_venda: precoFinal,
             quantidade_estoque: parseInt(document.getElementById('prod-estoque')?.value) || 0,
             estoque_minimo: parseInt(document.getElementById('prod-estoque-min')?.value) || 0,
@@ -3679,9 +3876,7 @@ const App = (() => {
     }
 
     function calcAdvanced() {
-        const comprimento_m = Math.max(0, parseFloat(document.getElementById('adv-comprimento')?.value) || 0);
-        const diametro_mm = Math.max(0, parseFloat(document.getElementById('adv-diametro')?.value) || 0);
-        const densidade = Math.max(0, parseFloat(document.getElementById('adv-densidade')?.value) || 0);
+        const peso_g = Math.max(0, parseFloat(document.getElementById('adv-peso-total')?.value) || 0);
         const tempo_min = Math.max(0, parseFloat(document.getElementById('adv-tempo-min')?.value) || 0);
 
         const custo_kg = Math.max(0, parseFloat(document.getElementById('adv-custo-kg')?.value) || 0);
@@ -3697,12 +3892,6 @@ const App = (() => {
         const outros = Math.max(0, parseFloat(document.getElementById('adv-outros')?.value) || 0);
         const margem_pc = Math.max(0, parseFloat(document.getElementById('adv-margem')?.value) || 0) / 100;
 
-        const raio_mm = diametro_mm / 2;
-        const area_mm2 = Math.PI * raio_mm * raio_mm;
-        const area_cm2 = area_mm2 / 100;
-        const comprimento_cm = comprimento_m * 100;
-        const volume_cm3 = area_cm2 * comprimento_cm;
-        const peso_g = volume_cm3 * densidade;
         const tempo_h = tempo_min / 60;
 
         const calc = Calculator.calcularDetalhado({
@@ -3721,9 +3910,6 @@ const App = (() => {
             margem: margem_pc
         });
 
-        setText('step-raio', raio_mm > 0 ? raio_mm.toFixed(3) + ' mm' : '—');
-        setText('step-area', area_mm2 > 0 ? area_mm2.toFixed(4) + ' mm² = ' + area_cm2.toFixed(6) + ' cm²' : '—');
-        setText('step-volume', volume_cm3 > 0 ? volume_cm3.toFixed(4) + ' cm³' : '—');
         setText('step-peso', peso_g > 0 ? peso_g.toFixed(2) + ' g' : '—');
         setText('step-tempo-h', tempo_min > 0 ? tempo_min + ' min' : '—');
 
@@ -3747,6 +3933,19 @@ const App = (() => {
         setText('res-lucro', fmtC(calc.lucroEstimado));
         setText('res-margem-real', calc.margemReal.toFixed(1).replace('.', ',') + '%');
 
+        const manualPrice = Math.max(0, parseFloat(document.getElementById('adv-preco-manual')?.value) || 0);
+        const manualMarginEl = document.getElementById('res-margem-manual');
+        if (manualMarginEl) {
+            if (manualPrice > 0) {
+                const manualMargin = manualPrice > 0 ? ((manualPrice - calc.custoTotal) / manualPrice) * 100 : 0;
+                manualMarginEl.textContent = manualMargin.toFixed(1).replace('.', ',') + '%';
+                manualMarginEl.className = manualMargin < 20 ? 'text-danger' : 'text-success';
+            } else {
+                manualMarginEl.textContent = '—';
+                manualMarginEl.className = '';
+            }
+        }
+
         const alertEl = document.getElementById('margin-alert');
         if (alertEl) {
             alertEl.classList.toggle('hidden', !(calc.custoTotal > 0 && calc.margemReal < 20));
@@ -3763,13 +3962,11 @@ const App = (() => {
     }
 
     function calcResetForm() {
-        ['adv-comprimento', 'adv-tempo-min', 'adv-modelagem', 'adv-acabamento', 'adv-fixacao', 'adv-outros', 'adv-nome-produto'].forEach(id => {
+        ['adv-peso-total', 'adv-tempo-min', 'adv-modelagem', 'adv-acabamento', 'adv-fixacao', 'adv-outros', 'adv-nome-produto', 'adv-preco-manual'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = el.type === 'number' ? '0' : '';
         });
-        setInputVal('adv-diametro', 1.75);
-        setInputVal('adv-densidade', 1.24);
-        setInputVal('adv-comprimento', '');
+        setInputVal('adv-peso-total', '');
         setInputVal('adv-tempo-min', '');
         renderCalculator();
         showToast('Formulário limpo.', 'info');
@@ -3986,7 +4183,7 @@ const App = (() => {
         // Products
         openProductSummary, openProductModal, saveProduct, deleteProduct, duplicateProduct,
         openProductInRootFolder, openCreateVariationModal,
-        calcProductPreview, switchProductTab, onCategoryChange, toggleVariationFields, onVariationParentChange,
+        calcProductPreview, switchProductTab, onCategoryChange, toggleVariationFields, onVariationParentChange, onProductCalcModeChange, syncProductAdvancedManualPrice,
         toggleProductView, debounceProductSearch, filterProducts,
         refreshProductFiles, removeProductFile, downloadProductZip, setProductCover,
         // Sales

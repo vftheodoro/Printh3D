@@ -725,36 +725,23 @@
                     <div class="calc-layout">
                         <div class="calc-inputs">
                             <div class="card calc-card">
-                                <h3><i data-lucide="ruler"></i> 1. Dados Físicos da Peça</h3>
+                                <h3><i data-lucide="ruler"></i> 1. Valores da Peça (Dado pelo Fatiador)</h3>
                                 <div class="form-grid">
                                     <div class="form-group">
-                                        <label>Comprimento do Filamento (m)</label>
-                                        <input type="number" id="adv-comprimento" step="0.01" min="0" placeholder="Ex: 15.5" oninput="App.calcAdvanced()">
-                                        <small>Comprimento usado de filamento em metros</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Diâmetro do Filamento (mm)</label>
-                                        <input type="number" id="adv-diametro" step="0.01" min="0" value="1.75" placeholder="1.75" oninput="App.calcAdvanced()">
-                                        <small>Padrão: 1.75mm (FDM comum)</small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Densidade do Material (g/cm³)</label>
-                                        <input type="number" id="adv-densidade" step="0.01" min="0" value="1.24" placeholder="1.24" oninput="App.calcAdvanced()">
-                                        <small>PLA ≈ 1.24 · ABS ≈ 1.04 · PETG ≈ 1.27</small>
+                                        <label>Peso Total da Peça (g)</label>
+                                        <input type="number" id="adv-peso-total" step="0.01" min="0" placeholder="Ex: 42.8" oninput="App.calcAdvanced()">
+                                        <small>Peso total informado pelo usuário/fatiador. Não é estimado pelo sistema.</small>
                                     </div>
                                     <div class="form-group">
                                         <label>Tempo de Impressão (minutos)</label>
                                         <input type="number" id="adv-tempo-min" step="1" min="0" placeholder="Ex: 180" oninput="App.calcAdvanced()">
-                                        <small>Tempo total estimado em minutos</small>
+                                        <small>Tempo total informado pelo slicer.</small>
                                     </div>
                                 </div>
 
                                 <div class="calc-steps" id="calc-steps-fisicos">
-                                    <div class="calc-step-title"><i data-lucide="bar-chart-3"></i> Cálculos Intermediários</div>
-                                    <div class="calc-step-row"><span>Raio do filamento</span><span id="step-raio">—</span></div>
-                                    <div class="calc-step-row"><span>Área da seção (mm² → cm²)</span><span id="step-area">—</span></div>
-                                    <div class="calc-step-row"><span>Volume de filamento</span><span id="step-volume">—</span></div>
-                                    <div class="calc-step-row highlight"><span><i data-lucide="scale"></i> Peso estimado</span><span id="step-peso">—</span></div>
+                                    <div class="calc-step-title"><i data-lucide="bar-chart-3"></i> Conferência dos Dados</div>
+                                    <div class="calc-step-row highlight"><span><i data-lucide="scale"></i> Peso total considerado</span><span id="step-peso">—</span></div>
                                     <div class="calc-step-row"><span>Tempo convertido</span><span id="step-tempo-h">—</span></div>
                                 </div>
                             </div>
@@ -845,9 +832,15 @@
                                         <label>Margem de Lucro (%)</label>
                                         <input type="number" id="adv-margem" step="0.5" min="0" max="500" placeholder="50" oninput="App.calcAdvanced()">
                                     </div>
+                                    <div class="form-group">
+                                        <label>Preço de Venda Manual (R$)</label>
+                                        <input type="number" id="adv-preco-manual" step="0.01" min="0" placeholder="Opcional" oninput="App.calcAdvanced()">
+                                        <small>Digite um preço manual para ver a margem real nesse preço.</small>
+                                    </div>
                                     <div class="result-row result-price"><span>PREÇO DE VENDA</span><span id="res-preco-venda">R$ 0,00</span></div>
                                     <div class="result-row result-profit"><span>LUCRO</span><span id="res-lucro">R$ 0,00</span></div>
                                     <div class="result-row"><span>Margem Real</span><span id="res-margem-real">0,0%</span></div>
+                                    <div class="result-row"><span>Margem com Preço Manual</span><span id="res-margem-manual">—</span></div>
                                 </div>
                                 <div class="margin-alert hidden" id="margin-alert">
                                     <i data-lucide="alert-triangle"></i> Margem abaixo de 20%! Considere ajustar o preço.

@@ -700,7 +700,7 @@ const Database = (() => {
     function getFileType(filename) {
         const ext = filename.toLowerCase().split('.').pop();
         if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext)) return 'image';
-        if (['stl', 'obj', '3mf', 'step', 'stp'].includes(ext)) return 'model3d';
+        if (['stl', 'obj', '3mf', 'step', 'stp', 'zip', 'rar'].includes(ext)) return 'model3d';
         if (['pdf', 'doc', 'docx', 'txt'].includes(ext)) return 'document';
         return 'other';
     }
