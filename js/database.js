@@ -5,7 +5,7 @@
 
 const Database = (() => {
     const DB_NAME = 'printh3d_pro';
-    const DB_VERSION = 4;
+    const DB_VERSION = 5;
     let db = null;
     let rootSyncSuspendCounter = 0;
     let rootSyncTimer = null;
@@ -20,6 +20,7 @@ const Database = (() => {
         PROMOTIONS: 'promotions',
         COUPONS: 'coupons',
         SALES: 'sales',
+        SALE_FILES: 'sale_files',
         CLIENTS: 'clients',
         EXPENSES: 'expenses',
         TRASH: 'trash'
@@ -85,10 +86,12 @@ const Database = (() => {
             stores[storeName] = await getAll(storeName);
         }
         const productFiles = await getAll(STORES.PRODUCT_FILES);
+        const saleFiles = await getAll(STORES.SALE_FILES);
         return {
             generated_at: new Date().toISOString(),
             stores,
-            productFiles
+            productFiles,
+            saleFiles
         };
     }
 
@@ -99,12 +102,14 @@ const Database = (() => {
 
         const stores = snapshot.stores || {};
         const productFiles = snapshot.productFiles || [];
+        const saleFiles = snapshot.saleFiles || [];
 
         await withRootSyncSuspended(async () => {
             for (const storeName of JSON_BACKUP_STORES) {
                 await clearStore(storeName);
             }
             await clearStore(STORES.PRODUCT_FILES);
+            await clearStore(STORES.SALE_FILES);
 
             for (const storeName of JSON_BACKUP_STORES) {
                 const rows = Array.isArray(stores[storeName]) ? stores[storeName] : [];
@@ -115,6 +120,10 @@ const Database = (() => {
 
             for (const row of productFiles) {
                 await put(STORES.PRODUCT_FILES, row);
+            }
+
+            for (const row of saleFiles) {
+                await put(STORES.SALE_FILES, row);
             }
         });
 
@@ -187,6 +196,14 @@ const Database = (() => {
                     store.createIndex('product_id', 'product_id', { unique: false });
                     store.createIndex('vendedor_id', 'vendedor_id', { unique: false });
                     store.createIndex('data_venda', 'data_venda', { unique: false });
+                }
+
+                // Sale Files (proofs and attachments)
+                if (!database.objectStoreNames.contains(STORES.SALE_FILES)) {
+                    const store = database.createObjectStore(STORES.SALE_FILES, { keyPath: 'id', autoIncrement: true });
+                    store.createIndex('sale_id', 'sale_id', { unique: false });
+                    store.createIndex('mime_type', 'mime_type', { unique: false });
+                    store.createIndex('created_at', 'created_at', { unique: false });
                 }
 
                 // Clients
@@ -814,10 +831,20 @@ const Database = (() => {
         const filesMeta = files.map(f => ({ ...f, blob: undefined }));
         zip.file('product_files_meta.json', JSON.stringify(filesMeta, null, 2));
 
+        const saleFiles = await getAll(STORES.SALE_FILES);
+        const saleFilesMeta = saleFiles.map(f => ({ ...f, blob: undefined }));
+        zip.file('sale_files_meta.json', JSON.stringify(saleFilesMeta, null, 2));
+
         const filesFolder = zip.folder('files');
         for (const f of files) {
             if (f.blob) {
-                filesFolder.file(`${f.id}_${f.nome_arquivo}`, f.blob);
+                filesFolder.file(`product_${f.id}_${f.nome_arquivo}`, f.blob);
+            }
+        }
+
+        for (const f of saleFiles) {
+            if (f.blob) {
+                filesFolder.file(`sale_${f.id}_${f.nome_arquivo}`, f.blob);
             }
         }
 
@@ -855,7 +882,7 @@ const Database = (() => {
             const filesFolder = zip.folder('files');
 
             for (const m of meta) {
-                const binFile = filesFolder.file(`${m.id}_${m.nome_arquivo}`);
+                const binFile = filesFolder.file(`product_${m.id}_${m.nome_arquivo}`);
                 if (binFile) {
                     const blob = await binFile.async('arraybuffer');
                     productFiles.push({ ...m, blob });
@@ -863,7 +890,23 @@ const Database = (() => {
             }
         }
 
-        await restoreFromRootSnapshot({ stores, productFiles });
+        const saleFiles = [];
+        const saleMetaFile = zip.file('sale_files_meta.json');
+        if (saleMetaFile) {
+            const metaText = await saleMetaFile.async('text');
+            const meta = JSON.parse(metaText);
+            const filesFolder = zip.folder('files');
+
+            for (const m of meta) {
+                const binFile = filesFolder.file(`sale_${m.id}_${m.nome_arquivo}`);
+                if (binFile) {
+                    const blob = await binFile.async('arraybuffer');
+                    saleFiles.push({ ...m, blob });
+                }
+            }
+        }
+
+        await restoreFromRootSnapshot({ stores, productFiles, saleFiles });
 
         console.log('[Database] Backup importado com sucesso.');
     }
@@ -873,8 +916,8 @@ const Database = (() => {
     // ------------------------------------------
     async function exportExcel() {
         const workbook = XLSX.utils.book_new();
-        const storeNames = ['users', 'settings', 'categories', 'products', 'promotions', 'coupons', 'sales', 'clients', 'expenses', 'trash'];
-        const sheetLabels = ['USERS', 'SETTINGS', 'CATEGORIES', 'PRODUCTS', 'PROMOTIONS', 'COUPONS', 'SALES', 'CLIENTS', 'EXPENSES', 'TRASH'];
+        const storeNames = ['users', 'settings', 'categories', 'products', 'promotions', 'coupons', 'sales', 'sale_files', 'clients', 'expenses', 'trash'];
+        const sheetLabels = ['USERS', 'SETTINGS', 'CATEGORIES', 'PRODUCTS', 'PROMOTIONS', 'COUPONS', 'SALES', 'SALE_FILES', 'CLIENTS', 'EXPENSES', 'TRASH'];
 
         for (let i = 0; i < storeNames.length; i++) {
             const data = await getAll(storeNames[i]);

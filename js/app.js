@@ -1987,6 +1987,19 @@ const App = (() => {
             .toLowerCase();
     }
 
+    function getLocalDateTimeValue(date = new Date(), withSeconds = true) {
+        const d = date instanceof Date ? date : new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+        return withSeconds
+            ? `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`
+            : `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
     function getKnownCities() {
         const sales = Storage.getSheet('SALES');
         const clients = Storage.getSheet('CLIENTS');
@@ -2007,10 +2020,32 @@ const App = (() => {
     }
 
     function onSaleClientInput() {
-        const nome = document.getElementById('sale-cliente')?.value.trim();
-        if (!nome) return;
-
         const clients = Storage.getSheet('CLIENTS');
+        const nome = document.getElementById('sale-cliente')?.value.trim();
+        const suggestionsEl = document.getElementById('sale-client-suggestions');
+
+        if (!nome) {
+            if (suggestionsEl) suggestionsEl.innerHTML = '';
+            return;
+        }
+
+        const nomeNormLike = normalizeText(nome);
+        const suggestions = clients
+            .filter(c => normalizeText(c.nome).includes(nomeNormLike))
+            .slice(0, 6);
+
+        if (suggestionsEl) {
+            if (suggestions.length === 0) {
+                suggestionsEl.innerHTML = '';
+            } else {
+                suggestionsEl.innerHTML = suggestions.map(c => `
+                    <button type="button" class="btn btn-sm btn-secondary" style="margin:0 0.35rem 0.35rem 0;" onclick="App.applySaleClientSuggestion(${c.id})">
+                        ${escapeHtml(c.nome || 'Cliente')}
+                    </button>
+                `).join('');
+            }
+        }
+
         const existing = clients.find(c => normalizeText(c.nome) === normalizeText(nome));
         if (!existing) return;
 
@@ -2021,6 +2056,107 @@ const App = (() => {
         if (ig && !ig.value.trim()) ig.value = existing.instagram || '';
         if (wa && !wa.value.trim()) wa.value = existing.whatsapp || '';
         if (city && !city.value.trim()) city.value = existing.cidade || '';
+    }
+
+    function applySaleClientSuggestion(clientId) {
+        const client = Storage.getRowById('CLIENTS', Number(clientId));
+        if (!client) return;
+
+        const nomeEl = document.getElementById('sale-cliente');
+        const igEl = document.getElementById('sale-client-instagram');
+        const waEl = document.getElementById('sale-client-whatsapp');
+        const cityEl = document.getElementById('sale-cidade');
+        const suggestionsEl = document.getElementById('sale-client-suggestions');
+
+        if (nomeEl) nomeEl.value = client.nome || '';
+        if (igEl) igEl.value = formatInstagramHandle(client.instagram || '');
+        if (waEl) waEl.value = formatWhatsAppNumber(client.whatsapp || '');
+        if (cityEl && !cityEl.value.trim()) cityEl.value = client.cidade || '';
+        if (suggestionsEl) suggestionsEl.innerHTML = '';
+    }
+
+    function formatInstagramHandle(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const withoutAt = raw.replace(/^@+/, '').replace(/\s+/g, '');
+        return withoutAt ? `@${withoutAt}` : '';
+    }
+
+    function formatWhatsAppNumber(value) {
+        const digits = String(value || '').replace(/\D+/g, '').slice(0, 13);
+        if (!digits) return '';
+
+        const ddi = digits.length > 11 ? `+${digits.slice(0, digits.length - 11)} ` : '';
+        const local = digits.slice(-11);
+        const ddd = local.slice(0, 2);
+        const rest = local.slice(2);
+        if (rest.length <= 4) return `${ddi}(${ddd}) ${rest}`.trim();
+        if (rest.length <= 8) return `${ddi}(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`.trim();
+        return `${ddi}(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`.trim();
+    }
+
+    function onSaleInstagramInput() {
+        const ig = document.getElementById('sale-client-instagram');
+        if (!ig) return;
+        ig.value = formatInstagramHandle(ig.value);
+    }
+
+    function onSaleWhatsappInput() {
+        const wa = document.getElementById('sale-client-whatsapp');
+        if (!wa) return;
+        wa.value = formatWhatsAppNumber(wa.value);
+    }
+
+    function filterSaleProducts() {
+        const input = document.getElementById('sale-product-search');
+        const select = document.getElementById('sale-product');
+        const resultBox = document.getElementById('sale-product-results');
+        if (!input || !select || !resultBox) return;
+
+        const queryNorm = normalizeText(input.value || '');
+        const options = Array.from(select.options).filter((opt, idx) => idx > 0 && opt.value);
+        const matches = options
+            .filter(opt => {
+                const label = `${opt.dataset.nome || ''} ${opt.textContent || ''}`;
+                return !queryNorm || normalizeText(label).includes(queryNorm);
+            })
+            .slice(0, 8);
+
+        if (matches.length === 0) {
+            resultBox.innerHTML = '<small class="text-muted">Nenhum produto encontrado.</small>';
+            return;
+        }
+
+        resultBox.innerHTML = matches.map(opt => `
+            <button type="button" class="btn btn-sm btn-secondary" style="width:100%;text-align:left;justify-content:flex-start;margin:0 0 0.3rem 0;" onclick="App.selectSaleProduct(${Number(opt.value)})">
+                ${escapeHtml(opt.dataset.nome || opt.textContent.split(' — ')[0] || 'Produto')}
+                <small style="opacity:0.75;margin-left:0.4rem;">${fmtC(parseFloat(opt.dataset.preco) || 0)}</small>
+            </button>
+        `).join('');
+    }
+
+    function selectSaleProduct(productId) {
+        const select = document.getElementById('sale-product');
+        if (!select) return;
+        select.value = String(productId || '');
+        onSaleProductChange();
+
+        const selected = select.options[select.selectedIndex];
+        const input = document.getElementById('sale-product-search');
+        if (input && selected && selected.value) {
+            input.value = selected.dataset.nome || selected.textContent.split(' — ')[0] || '';
+        }
+
+        const resultBox = document.getElementById('sale-product-results');
+        if (resultBox) resultBox.innerHTML = '';
+    }
+
+    function onSaleProductSearchKeydown(event) {
+        if (!event || event.key !== 'Enter') return;
+        event.preventDefault();
+
+        const firstBtn = document.querySelector('#sale-product-results button');
+        if (firstBtn) firstBtn.click();
     }
 
     function upsertClientFromSale(clientData) {
@@ -2066,6 +2202,104 @@ const App = (() => {
             created_at: new Date().toISOString()
         });
         return created.id;
+    }
+
+    function formatBytes(bytes) {
+        const size = Number(bytes || 0);
+        if (!size) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        const idx = Math.min(units.length - 1, Math.floor(Math.log(size) / Math.log(1024)));
+        return `${(size / Math.pow(1024, idx)).toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
+    }
+
+    async function saveSaleAttachments(saleId, files) {
+        if (!saleId || !files || files.length === 0) return { success: 0, failed: 0 };
+        let success = 0;
+        let failed = 0;
+
+        for (const file of files) {
+            try {
+                const blobData = await file.arrayBuffer();
+                await Database.add(Database.STORES.SALE_FILES, {
+                    sale_id: saleId,
+                    nome_arquivo: file.name,
+                    mime_type: file.type || 'application/octet-stream',
+                    tamanho_bytes: file.size || 0,
+                    blob: blobData,
+                    created_at: new Date().toISOString()
+                });
+                success += 1;
+            } catch (_) {
+                failed += 1;
+            }
+        }
+
+        return { success, failed };
+    }
+
+    async function openSaleAttachments(saleId) {
+        const files = await Database.getByIndex(Database.STORES.SALE_FILES, 'sale_id', saleId);
+        if (!files || files.length === 0) {
+            showToast('Esta venda não possui anexos.', 'info');
+            return;
+        }
+
+        const renderPreview = (file) => {
+            const name = String(file.nome_arquivo || '').toLowerCase();
+            const mime = String(file.mime_type || '').toLowerCase();
+            const canPreviewImage = mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(name);
+            const canPreviewPdf = mime.includes('pdf') || /\.pdf$/i.test(name);
+
+            if ((!canPreviewImage && !canPreviewPdf) || !file.blob) {
+                return '<small class="text-muted">Pré-visualização indisponível para este tipo de arquivo.</small>';
+            }
+
+            const blob = new Blob([file.blob], { type: file.mime_type || 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+
+            if (canPreviewImage) {
+                return `<img src="${url}" alt="${escapeHtml(file.nome_arquivo || 'anexo')}" style="width:100%;max-height:220px;object-fit:contain;border:1px solid var(--border);border-radius:8px;background:#fff;" loading="lazy">`;
+            }
+            return `<iframe src="${url}" title="${escapeHtml(file.nome_arquivo || 'pdf')}" style="width:100%;height:260px;border:1px solid var(--border);border-radius:8px;background:#fff;"></iframe>`;
+        };
+
+        const listHtml = files.map(f => `
+            <div style="display:grid;gap:0.5rem;padding:0.55rem 0.65rem;border:1px solid var(--border);border-radius:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">
+                <div style="min-width:0;display:grid;gap:0.15rem;flex:1;">
+                    <strong style="font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(f.nome_arquivo || 'arquivo')}</strong>
+                    <small class="text-muted">${formatBytes(f.tamanho_bytes || 0)}</small>
+                </div>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="App.downloadSaleAttachment(${f.id})">
+                    <i data-lucide="download"></i> Baixar
+                </button>
+                </div>
+                ${renderPreview(f)}
+            </div>
+        `).join('');
+
+        openModal('Anexos da Venda', `
+            <div style="display:grid;gap:0.5rem;max-height:360px;overflow:auto;">${listHtml}</div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="App.closeModal()">Fechar</button>
+            </div>
+        `);
+    }
+
+    async function downloadSaleAttachment(fileId) {
+        const file = await Database.getById(Database.STORES.SALE_FILES, fileId);
+        if (!file || !file.blob) {
+            showToast('Anexo não encontrado.', 'warning');
+            return;
+        }
+
+        const blob = new Blob([file.blob], { type: file.mime_type || 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.nome_arquivo || `anexo_venda_${fileId}`;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
     function renderSales() {
@@ -2173,6 +2407,7 @@ const App = (() => {
                 <td>${cupom !== '—' ? `<code>${escapeHtml(cupom)}</code>` : '—'}</td>
                 <td>${escapeHtml(vendedor ? vendedor.nome : '—')}</td>
                 <td class="actions">
+                    <button class="btn btn-sm btn-icon" onclick="App.openSaleAttachments(${s.id})" title="Anexos"><i data-lucide="paperclip"></i></button>
                     <button class="btn btn-sm btn-icon" onclick="App.duplicateSale(${s.id})" title="Duplicar"><i data-lucide="copy"></i></button>
                 </td>
             </tr>`;
@@ -2202,8 +2437,7 @@ const App = (() => {
             .map(c => `<option value="${escapeHtml(c)}"></option>`)
             .join('');
 
-        const now = new Date();
-        const defaultDate = now.toISOString().slice(0, 16);
+        const defaultDate = getLocalDateTimeValue(new Date(), false);
         const mode = initialData?.mode === 'personalizado' ? 'personalizado' : 'catalogo';
         const defaultQty = Math.max(1, parseFloat(initialData?.quantidade) || 1);
         const defaultItemName = initialData?.item_nome || '';
@@ -2234,11 +2468,13 @@ const App = (() => {
                 </div>
                 <div class="form-group" id="sale-product-group">
                     <label>Produto do Catálogo</label>
-                    <select id="sale-product" onchange="App.onSaleProductChange()">
+                    <input type="text" id="sale-product-search" placeholder="Pesquise e selecione um produto..." oninput="App.filterSaleProducts()" onfocus="App.filterSaleProducts()" onkeydown="App.onSaleProductSearchKeydown(event)" autocomplete="off" style="margin-bottom:0.45rem;">
+                    <div id="sale-product-results" style="margin-bottom:0.45rem;"></div>
+                    <select id="sale-product" onchange="App.onSaleProductChange()" style="display:none;">
                         <option value="">— Selecione um produto —</option>
                         ${options}
                     </select>
-                    <small>Opcional para venda personalizada.</small>
+                    <small>Digite para buscar rapidamente no catálogo.</small>
                 </div>
                 <div class="form-group" id="sale-item-name-group">
                     <label>Nome do Item</label>
@@ -2250,16 +2486,17 @@ const App = (() => {
                 <label>Nome do Cliente</label>
                 <input type="text" id="sale-cliente" list="sale-client-list" value="${escapeHtml(defaultClient)}" placeholder="Nome do cliente (opcional)" oninput="App.onSaleClientInput()">
                 <datalist id="sale-client-list">${clientOptions}</datalist>
+                <div id="sale-client-suggestions" style="margin-top:0.45rem;"></div>
             </div>
 
             <div class="form-grid">
                 <div class="form-group">
                     <label>@ Instagram do Cliente</label>
-                    <input type="text" id="sale-client-instagram" value="${escapeHtml(defaultInstagram)}" placeholder="@cliente">
+                    <input type="text" id="sale-client-instagram" value="${escapeHtml(formatInstagramHandle(defaultInstagram))}" placeholder="@cliente" oninput="App.onSaleInstagramInput()" onblur="App.onSaleInstagramInput()">
                 </div>
                 <div class="form-group">
                     <label>WhatsApp do Cliente</label>
-                    <input type="text" id="sale-client-whatsapp" value="${escapeHtml(defaultWhatsapp)}" placeholder="(11) 99999-9999">
+                    <input type="text" id="sale-client-whatsapp" value="${escapeHtml(formatWhatsAppNumber(defaultWhatsapp))}" placeholder="(11) 99999-9999" oninput="App.onSaleWhatsappInput()" onblur="App.onSaleWhatsappInput()">
                 </div>
                 <div class="form-group">
                     <label>Cidade</label>
@@ -2301,6 +2538,11 @@ const App = (() => {
                     <input type="number" id="sale-desconto" value="0" min="0" max="100" step="0.5" oninput="App.calcSalePreview()">
                 </div>
                 <div class="form-group">
+                    <label>Frete (R$)</label>
+                    <input type="number" id="sale-frete" value="${Number.isFinite(parseFloat(initialData?.valor_frete)) ? parseFloat(initialData.valor_frete) : 0}" min="0" step="0.01" oninput="App.calcSalePreview()">
+                    <small>Cobrança opcional de entrega.</small>
+                </div>
+                <div class="form-group">
                     <label>Tipo de Pagamento</label>
                     <select id="sale-tipo-pagamento" oninput="App.calcSalePreview()">
                         <option value="pix" ${defaultPaymentType === 'pix' ? 'selected' : ''}>PIX</option>
@@ -2335,6 +2577,12 @@ const App = (() => {
                 <textarea id="sale-observacoes" rows="2" placeholder="Detalhes da venda, customizações, prazo, etc.">${escapeHtml(defaultObs)}</textarea>
             </div>
 
+            <div class="form-group">
+                <label>Anexar comprovantes / arquivos (opcional)</label>
+                <input type="file" id="sale-attachments" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.zip,.rar">
+                <small>Ex.: comprovante PIX, recibo, contrato ou print.</small>
+            </div>
+
             <div class="form-group" id="sale-stock-group" style="display:flex;align-items:center;gap:0.75rem;">
                 <input type="checkbox" id="sale-update-stock" checked>
                 <label for="sale-update-stock" style="margin:0;cursor:pointer;">Baixar estoque automaticamente (somente catálogo)</label>
@@ -2346,6 +2594,7 @@ const App = (() => {
                     <div class="calc-item"><span>Valor Bruto</span><span id="sale-valor-bruto">—</span></div>
                     <div class="calc-item"><span>Custo Total</span><span id="sale-custo-total">—</span></div>
                     <div class="calc-item"><span>Desconto</span><span id="sale-desconto-valor" class="text-warning">—</span></div>
+                    <div class="calc-item"><span>Frete</span><span id="sale-frete-prev">—</span></div>
                     <div class="calc-item total"><span>Valor Final</span><span id="sale-valor-final">—</span></div>
                     <div class="calc-item"><span>Valor Pago</span><span id="sale-valor-pago-prev">—</span></div>
                     <div class="calc-item"><span>Valor Devido</span><span id="sale-valor-devido-prev">—</span></div>
@@ -2365,6 +2614,8 @@ const App = (() => {
         }
         toggleSaleMode();
         if (mode === 'catalogo') onSaleProductChange();
+        if (mode === 'catalogo' && !initialData?.product_id) filterSaleProducts();
+        onSaleClientInput();
         calcSalePreview();
     }
 
@@ -2391,6 +2642,8 @@ const App = (() => {
         if (!isCatalog) {
             if (cupomInput) cupomInput.value = '';
             if (cupomMsg) { cupomMsg.textContent = ''; cupomMsg.className = 'text-muted'; }
+            const resultBox = document.getElementById('sale-product-results');
+            if (resultBox) resultBox.innerHTML = '';
         }
 
         calcSalePreview();
@@ -2417,6 +2670,9 @@ const App = (() => {
         if (costInput && (!costInput.value || parseFloat(costInput.value) <= 0)) costInput.value = String(unitCost);
         if (itemNameInput && !itemNameInput.value.trim()) itemNameInput.value = option.dataset.nome || option.textContent.split(' — ')[0] || '';
 
+        const searchInput = document.getElementById('sale-product-search');
+        if (searchInput) searchInput.value = option.dataset.nome || option.textContent.split(' — ')[0] || '';
+
         calcSalePreview();
     }
 
@@ -2429,6 +2685,7 @@ const App = (() => {
         const precoUnit = Math.max(0, parseFloat(document.getElementById('sale-unit-price')?.value) || 0);
         const custoUnit = Math.max(0, parseFloat(document.getElementById('sale-unit-cost')?.value) || 0);
         const desconto = parseFloat(document.getElementById('sale-desconto')?.value) || 0;
+        const frete = Math.max(0, parseFloat(document.getElementById('sale-frete')?.value) || 0);
         const valorPagoField = document.getElementById('sale-valor-pago');
 
         const isCatalog = mode === 'catalogo';
@@ -2442,7 +2699,8 @@ const App = (() => {
 
         const valorBruto = qty * precoUnit;
         const descontoValor = valorBruto * (desconto / 100);
-        const valorFinal = Math.max(0, valorBruto - descontoValor);
+        const valorFinalSemFrete = Math.max(0, valorBruto - descontoValor);
+        const valorFinal = Math.max(0, valorFinalSemFrete + frete);
         const custoTotal = qty * custoUnit;
         const lucro = valorFinal - custoTotal;
         const valorPagoInput = valorPagoField && String(valorPagoField.value).trim() === ''
@@ -2455,6 +2713,7 @@ const App = (() => {
         setText('sale-valor-bruto', fmtC(valorBruto));
         setText('sale-custo-total', fmtC(custoTotal));
         setText('sale-desconto-valor', `- ${fmtC(descontoValor)}`);
+        setText('sale-frete-prev', fmtC(frete));
         setText('sale-valor-final', fmtC(valorFinal));
         setText('sale-valor-pago-prev', fmtC(valorPago));
         setText('sale-valor-devido-prev', fmtC(valorDevido));
@@ -2513,6 +2772,7 @@ const App = (() => {
         const precoUnit = Math.max(0, parseFloat(document.getElementById('sale-unit-price')?.value) || 0);
         const custoUnit = Math.max(0, parseFloat(document.getElementById('sale-unit-cost')?.value) || 0);
         const desconto = parseFloat(document.getElementById('sale-desconto')?.value) || 0;
+        const frete = Math.max(0, parseFloat(document.getElementById('sale-frete')?.value) || 0);
         const cliente = document.getElementById('sale-cliente')?.value.trim() || '';
         const clienteInstagram = document.getElementById('sale-client-instagram')?.value.trim() || '';
         const clienteWhatsapp = document.getElementById('sale-client-whatsapp')?.value.trim() || '';
@@ -2529,7 +2789,8 @@ const App = (() => {
 
         const valorBruto = Calculator.round2(qty * precoUnit);
         const descontoValor = Calculator.round2(valorBruto * (desconto / 100));
-        const valorVenda = Calculator.round2(Math.max(0, valorBruto - descontoValor));
+        const valorVendaProdutos = Calculator.round2(Math.max(0, valorBruto - descontoValor));
+        const valorVenda = Calculator.round2(valorVendaProdutos + frete);
         const custoTotal = Calculator.round2(qty * custoUnit);
         const lucro = Calculator.round2(valorVenda - custoTotal);
         const valorPagoInput = valorPagoField && String(valorPagoField.value).trim() === ''
@@ -2565,7 +2826,7 @@ const App = (() => {
             cidade: cidadeEntrega
         });
 
-        Storage.addRow('SALES', {
+        const createdSale = Storage.addRow('SALES', {
             product_id: productId,
             client_id: clientId,
             item_nome: itemNome,
@@ -2588,10 +2849,27 @@ const App = (() => {
             lucro,
             desconto_percentual: desconto,
             desconto_valor: descontoValor,
+            valor_frete: frete,
             cupom_codigo: isCatalog ? (cupomCode || null) : null,
+            attachment_count: 0,
             observacoes,
-            data_venda: dataVenda || new Date().toISOString()
+            data_venda: dataVenda || getLocalDateTimeValue()
         });
+
+        const saleId = createdSale?.id || null;
+        const attachmentFiles = Array.from(document.getElementById('sale-attachments')?.files || []);
+        if (saleId && attachmentFiles.length > 0) {
+            const result = await saveSaleAttachments(saleId, attachmentFiles);
+            if (result.success > 0) {
+                Storage.updateRow('SALES', saleId, {
+                    attachment_count: result.success,
+                    updated_at: new Date().toISOString()
+                });
+            }
+            if (result.failed > 0) {
+                showToast(`${result.failed} anexo(s) falharam no upload.`, 'warning');
+            }
+        }
 
         showToast('Venda registrada!', 'success');
         closeModal();
@@ -2630,7 +2908,7 @@ const App = (() => {
 
         const duplicated = {
             ...sale,
-            data_venda: new Date().toISOString()
+            data_venda: getLocalDateTimeValue()
         };
         delete duplicated.id;
 
@@ -4188,6 +4466,8 @@ const App = (() => {
         refreshProductFiles, removeProductFile, downloadProductZip, setProductCover,
         // Sales
         openSaleModal, toggleSaleMode, onSaleProductChange, onSaleClientInput, calcSalePreview, applySaleCoupon, saveSale, filterSales, duplicateSale,
+        applySaleClientSuggestion, onSaleInstagramInput, onSaleWhatsappInput, filterSaleProducts, selectSaleProduct, onSaleProductSearchKeydown,
+        openSaleAttachments, downloadSaleAttachment,
         // Expenses
         renderExpenses, openExpenseModal, calcExpenseTotal, saveExpense, deleteExpense, duplicateExpense,
         // Clients
