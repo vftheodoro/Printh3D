@@ -1,164 +1,94 @@
-# Printh3D Site
+# 🚀 Printh 3D — Impressão 3D de Alta Performance
 
-Site institucional/comercial para impressão 3D, com catálogo local de produtos, orçamento inteligente simplificado e envio direto para WhatsApp.
+![Printh3D Banner](public/assets/imagens/materials_hero.png)
 
-## Visão geral
+A **Printh 3D** é uma plataforma moderna e premium especializada em serviços de manufatura aditiva (impressão 3D) personalizada. Transformamos conceitos digitais em objetos físicos com precisão industrial, focando em uma experiência de usuário impecável e resultados de alta fidelidade.
 
-Este projeto é um site estático (HTML, CSS e JavaScript puro), sem backend, com foco em:
+---
 
-- Apresentação da marca Printh3D
-- Catálogo de produtos com busca inteligente e sugestões
-- Simulador de orçamento adaptativo para usuários leigos
-- Conversão direta para contato e fechamento via WhatsApp
+## ✨ Características Principais
 
-## Stack
+- **🎨 Design Premium**: Interface moderna com estética dark mode, glassmorphism e animações fluidas (Framer Motion).
+- **🖨️ Simulador de Orçamento**: Cálculo instantâneo de preços baseado em volume e material com prévia 3D interativa.
+- **📦 Catálogo de Produtos**: Galeria curada de modelos otimizados para diversas aplicações (Colecionáveis, Decoração, Industrial).
+- **📚 Central de Conhecimento**: Seção educativa sobre materiais (PLA, ABS, PETG, TPU) e processos de fabricação.
+- **🛍️ Integração Shopee**: Conexão direta com loja oficial na Shopee para compras com garantia da plataforma.
+- **📱 Ultra Responsivo**: Otimização completa para dispositivos móveis, garantindo a melhor experiência em qualquer tela.
 
-- HTML5
-- CSS3 (arquivo único em `css/style.css`)
-- JavaScript Vanilla modular (IIFE)
-- Bootstrap Icons (CDN)
+---
 
-## Estrutura principal
+## 🛠️ Tecnologias Utilizadas
+
+O projeto foi construído utilizando as tecnologias mais modernas do ecossistema Web:
+
+- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
+- **Estilização**: [Tailwind CSS](https://tailwindcss.com/)
+- **Animações**: [Framer Motion](https://www.framer.com/motion/)
+- **Ícones**: [Lucide React](https://lucide.dev/)
+- **Linguagem**: [TypeScript](https://www.typescriptlang.org/)
+- **Visualização 3D**: [React Three Fiber](https://docs.pmnd.rs/react-three-fiber/getting-started/introduction) (para o cubo do simulador)
+
+---
+
+## 🚀 Como Iniciar
+
+### Pré-requisitos
+- Node.js (v18+)
+- npm ou yarn
+
+### Instalação
+1. Clone o repositório:
+```bash
+git clone https://github.com/vftheodoro/Printh3D_Site.git
+```
+
+2. Instale as dependências:
+```bash
+npm install
+```
+
+3. Inicie o servidor de desenvolvimento:
+```bash
+npm run dev
+```
+
+4. Acesse `http://localhost:3000` no seu navegador.
+
+---
+
+## 📂 Estrutura do Projeto
 
 ```text
-Printh3D_Site/
-├─ index.html
-├─ views/
-│  └─ public/
-│     ├─ produtos.html
-│     ├─ produto.html
-│     └─ orcamento.html
-├─ css/
-│  └─ style.css
-├─ js/
-│  ├─ app.js
-│  ├─ products.js
-│  ├─ budget.js
-│  ├─ whatsapp.js
-│  └─ storage.js
-└─ assets/
-   └─ imagens/logos/
+src/
+├── app/              # Rotas e Páginas (Next.js App Router)
+│   ├── contato/      # Página de Contato e Redes Sociais
+│   ├── materias/     # Guia técnico de materiais
+│   ├── orcamento/    # Simulador interativo de orçamento
+│   └── produtos/     # Catálogo de modelos
+├── components/       # Componentes React reutilizáveis
+│   ├── home/         # Hero, Features, FAQ
+│   ├── layout/       # Navbar, Footer
+│   └── products/     # Cards de produtos e filtros
+├── lib/              # Lógica de negócios e dados (produtos, utilitários)
+└── public/           # Assets estáticos (Images, Logos, Favicon)
 ```
 
-## Páginas em uso
+---
 
-- `index.html` → Home
-- `views/public/produtos.html` → Catálogo
-- `views/public/produto.html` → Detalhe do produto
-- `views/public/orcamento.html` → Orçamento simplificado
+## 🎨 Identidade Visual
 
-## Como executar
+- **Primária**: Azul Printh3D (`#3B82F6`)
+- **Fundo**: Slate Deep Dark (`#020617`)
+- **Tipografia**: Outfit (Google Fonts)
 
-Como é um projeto estático, há duas opções:
+---
 
-1. Abrir `index.html` direto no navegador
-2. Rodar com servidor local (recomendado para navegação mais estável de paths)
+## 👨‍💻 Desenvolvido por
 
-Exemplo com VS Code + Live Server:
+**Victor Theodoro**
+- [Portfólio](https://vftheodoro.github.io/Portfolio/)
+- [LinkedIn](https://www.linkedin.com/in/victor-theodoro-braz-teixeira-603125206/)
 
-- Clique com botão direito em `index.html`
-- Selecione **Open with Live Server**
+---
 
-## Fluxo funcional resumido
-
-1. Usuário entra na Home e acessa Produtos ou Orçamento
-2. No catálogo, pode buscar por nome/categoria/material com sugestões em tempo real
-3. No detalhe, seleciona cor/acabamento e envia intenção de compra por WhatsApp
-4. No orçamento, informa uso da peça + dimensões + preferências e recebe faixa estimada
-5. O pedido/orçamento é salvo localmente e enviado por WhatsApp com dados estruturados
-
-## Módulos JavaScript
-
-- `js/app.js`
-  - Inicialização global
-  - Menu mobile
-  - Animações on-scroll
-  - Router por `data-page`
-  - Toasts
-
-- `js/products.js`
-  - Catálogo local (`catalog`)
-  - Busca inteligente com score
-  - Sugestões com teclado
-  - Renderização de cards e detalhe
-  - Disparo de compra via WhatsApp
-
-- `js/budget.js`
-  - Fluxo adaptativo de orçamento
-  - Cálculo por dimensão/uso/preenchimento/complexidade/acabamento
-  - Preview visual da peça
-  - Envio de estimativa via WhatsApp
-
-- `js/whatsapp.js`
-  - Montagem de mensagens (produto/orçamento/contato)
-  - Geração de link `wa.me`
-
-- `js/storage.js`
-  - Persistência em `localStorage` e `sessionStorage`
-  - Histórico de orçamento/pedidos/visualização
-  - Estrutura de usuário/sessão (legado para futura área de cliente)
-
-## Configurações rápidas
-
-### Número do WhatsApp
-
-Arquivo: `js/whatsapp.js`
-
-```js
-const PHONE_NUMBER = '5513997553465';
-```
-
-Troque para o número desejado no formato internacional sem `+`.
-
-### Catálogo de produtos
-
-Arquivo: `js/products.js` na constante `catalog`.
-
-Cada item possui campos como:
-
-- `id`
-- `name`
-- `shortDesc`
-- `fullDesc`
-- `material`
-- `price`
-- `colors`
-- `finishes`
-- `category`
-
-### Fórmula de orçamento
-
-Arquivo: `js/budget.js`.
-
-Principais constantes de calibração:
-
-- `BASE_FEE`
-- `COST_PER_CM3`
-- `USE_CASES`
-- `FINISH_MULTIPLIERS`
-- `DETAIL_MULTIPLIERS`
-- `URGENCY_MULTIPLIERS`
-- `SHAPE_MULTIPLIERS`
-- `SHAPE_OCCUPANCY`
-
-## Persistência local (browser)
-
-Chaves utilizadas (`storage.js`):
-
-- `printh3d_users`
-- `printh3d_session`
-- `printh3d_budgets`
-- `printh3d_orders`
-- `printh3d_product_history`
-
-## Próximos passos recomendados
-
-- Criar backend/API para persistência real e painel administrativo
-- Substituir catálogo local por endpoint externo
-- Adicionar testes de regressão para cálculo de orçamento
-
-## Autor
-
-- Victor Theodoro
-- Jacupiranga, SP — Brasil
-- E-mail: printh3d@outlook.com
+*Transformando bits em átomos com precisão e estilo.* 🛠️✨
