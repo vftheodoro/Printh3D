@@ -94,21 +94,14 @@ export default function Hero() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
-          className="flex flex-col sm:flex-row gap-6 w-full sm:w-auto"
+          className="flex justify-center w-full"
         >
           <Link
             href="/produtos"
-            className="flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-10 py-5 rounded-2xl font-black text-lg transition-all shadow-2xl shadow-blue-500/40 active:scale-95 hover:scale-105"
+            className="flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white px-12 py-5 rounded-2xl font-black text-lg transition-all shadow-2xl shadow-blue-500/40 active:scale-95 hover:scale-105"
           >
             <Grid className="w-6 h-6" />
-            CATÁLOGO
-          </Link>
-          <Link
-            href="/orcamento"
-            className="flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 text-white px-10 py-5 rounded-2xl font-black text-lg transition-all border border-white/10 active:scale-95 hover:scale-105 backdrop-blur-sm"
-          >
-            <Calculator className="w-6 h-6" />
-            ORÇAMENTO
+            VER CATÁLOGO
           </Link>
         </motion.div>
       </div>

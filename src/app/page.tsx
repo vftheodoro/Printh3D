@@ -2,9 +2,8 @@ import Navbar from "@/components/layout/Navbar";
 import Hero from "@/components/home/Hero";
 import Features from "@/components/home/Features";
 import FeaturedProducts from "@/components/home/FeaturedProducts";
-import FAQ from "@/components/home/FAQ";
+import ShopeeBanner from "@/components/common/ShopeeBanner";
 import Footer from "@/components/layout/Footer";
-import { MessageCircle } from "lucide-react";
 
 export default function Home() {
   return (
@@ -13,32 +12,32 @@ export default function Home() {
       
       <div className="flex-grow">
         <Hero />
-        <Features />
         <FeaturedProducts />
+        <Features />
         
         {/* Conversion CTA */}
-        <section className="max-w-7xl mx-auto px-6 py-20">
-          <div className="relative p-12 md:p-20 rounded-[3.5rem] bg-blue-600 overflow-hidden flex flex-col items-center text-center shadow-2xl shadow-blue-500/20">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-slate-950/20 rounded-full blur-[80px] translate-y-1/2 -translate-x-1/2" />
+        <section className="max-w-7xl mx-auto px-6 py-24">
+          <div className="relative p-12 md:p-20 rounded-[3rem] bg-slate-900 border border-white/5 overflow-hidden flex flex-col items-center text-center">
+            {/* Simple Background Glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-blue-600/10 blur-[120px] pointer-events-none" />
             
             <div className="relative z-10 max-w-2xl">
               <h2 className="text-4xl md:text-6xl font-black text-white mb-8 tracking-tighter">
-                Pronto para dar vida à sua ideia?
+                Pronto para dar vida à <span className="text-blue-500">sua ideia?</span>
               </h2>
-              <p className="text-xl text-blue-100 mb-12 font-medium">
-                Entre em contato com nossa equipe técnica e transforme seu projeto em realidade com precisão industrial.
+              <p className="text-lg text-slate-400 mb-12 font-medium leading-relaxed">
+                Entre em contato com nossa equipe técnica e transforme seu projeto em realidade com precisão e qualidade.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
                 <a 
                   href="/contato" 
-                  className="px-12 py-5 bg-white text-blue-600 rounded-2xl font-black text-lg shadow-xl hover:scale-105 active:scale-95 transition-all"
+                  className="w-full sm:w-auto px-10 py-5 bg-blue-600 text-white rounded-2xl font-black text-sm tracking-widest hover:bg-blue-500 transition-all active:scale-95 shadow-lg shadow-blue-500/20"
                 >
                   FALE CONOSCO
                 </a>
                 <a 
                   href="/produtos" 
-                  className="px-12 py-5 bg-blue-700 text-white rounded-2xl font-black text-lg hover:bg-blue-800 transition-all active:scale-95"
+                  className="w-full sm:w-auto px-10 py-5 bg-slate-800 text-white rounded-2xl font-black text-sm tracking-widest hover:bg-slate-700 transition-all active:scale-95"
                 >
                   VER CATÁLOGO
                 </a>
@@ -47,7 +46,7 @@ export default function Home() {
           </div>
         </section>
 
-        <FAQ />
+        <ShopeeBanner />
         
         {/* WhatsApp Floating CTA */}
         <a

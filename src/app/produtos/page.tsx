@@ -4,9 +4,10 @@ import { useState } from "react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import ProductCard from "@/components/products/ProductCard";
-import { filterProducts, getCategories, getAllProducts } from "@/lib/products";
+import ShopeeBanner from "@/components/common/ShopeeBanner";
+import { filterProducts, getCategories } from "@/lib/products";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, PackageOpen, LayoutGrid, X, ShoppingBag } from "lucide-react";
+import { Search, PackageOpen, LayoutGrid, X, Filter, Sparkles } from "lucide-react";
 import Image from "next/image";
 
 export default function Catalog() {
@@ -16,65 +17,91 @@ export default function Catalog() {
   const filtered = filterProducts(query, category);
 
   return (
-    <main className="min-h-screen flex flex-col bg-slate-950 text-white">
+    <main className="min-h-screen flex flex-col bg-slate-950 text-white selection:bg-blue-500/30">
       <Navbar />
 
-      <section className="pt-40 pb-32 px-6">
+      {/* Shopee Banner (Smaller, Top) */}
+      <div className="pt-32">
+        <ShopeeBanner />
+      </div>
+
+      {/* Catalog Section */}
+      <section className="pb-32 px-6 pt-10">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-12 mb-20 border-b border-white/5 pb-12">
+          
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-12 mb-20">
             <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-600/10 text-blue-500 text-[10px] font-black uppercase tracking-[0.2em] mb-6">
-                <LayoutGrid className="w-3 h-3" /> Explore peças
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/5 text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mb-6 border border-blue-500/10 shadow-inner">
+                <Sparkles className="w-3 h-3" /> Explore nosso acervo
               </div>
-              <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter">
-                Nosso <span className="text-gradient">Catálogo</span>
+              <h1 className="text-6xl md:text-8xl font-black mb-6 tracking-tighter leading-[0.9]">
+                Catálogo <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Premium</span>
               </h1>
-              <p className="text-lg text-slate-400 font-medium">
-                Coleção curada de modelos otimizados para impressão 3D em diversos materiais e aplicações.
+              <p className="text-lg text-slate-400 font-medium leading-relaxed max-w-xl">
+                Uma seleção criteriosa de modelos esculpidos detalhadamente e otimizados para a máxima fidelidade na impressão 3D.
               </p>
             </div>
 
-            <div className="flex flex-col gap-6 w-full lg:w-auto">
-              <div className="relative group">
-                <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
-                <input
-                  type="text"
-                  placeholder="Pesquisar modelos..."
-                  className="w-full lg:min-w-[400px] bg-slate-900 border border-white/10 rounded-2xl py-5 pl-14 pr-12 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-lg font-medium placeholder:text-slate-600"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                {query && (
-                  <button onClick={() => setQuery("")} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
-                    <X className="w-5 h-5" />
-                  </button>
-                )}
+            {/* Smart Filters & Search */}
+            <div className="flex flex-col gap-8 w-full lg:w-[480px]">
+              <div className="relative group/search">
+                <div className="absolute inset-0 bg-blue-600/5 blur-xl group-focus-within/search:bg-blue-600/10 transition-colors" />
+                <div className="relative flex items-center bg-slate-900/40 backdrop-blur-xl border border-white/5 rounded-[2rem] p-2 hover:border-white/10 focus-within:border-blue-500/50 transition-all shadow-2xl">
+                  <div className="flex items-center justify-center w-12 h-12 text-slate-500 group-focus-within/search:text-blue-500 transition-colors">
+                    <Search className="w-5 h-5 transition-transform group-focus-within/search:scale-110" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Pesquisar modelos, temas..."
+                    className="flex-grow bg-transparent border-none focus:ring-0 text-base font-bold placeholder:text-slate-600 placeholder:font-medium"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  <AnimatePresence>
+                    {query && (
+                      <motion.button 
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        onClick={() => setQuery("")} 
+                        className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all mr-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </motion.button>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
               
-              <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                <button
-                  onClick={() => setCategory("all")}
-                  className={`px-5 py-2 rounded-xl text-[10px] font-black transition-all border tracking-widest flex-shrink-0 ${
-                    category === "all"
-                      ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20"
-                      : "bg-slate-900 border-white/5 text-slate-400 hover:text-white"
-                  }`}
-                >
-                  TUDO
-                </button>
-                {categories.map((cat) => (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 uppercase tracking-widest px-2">
+                  <Filter className="w-3 h-3" /> Filtrar por categoria
+                </div>
+                <div className="flex flex-wrap gap-2">
                   <button
-                    key={cat}
-                    onClick={() => setCategory(cat)}
-                    className={`px-5 py-2 rounded-xl text-[10px] font-black transition-all border tracking-widest flex-shrink-0 ${
-                      category === cat
-                        ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20"
-                        : "bg-slate-900 border-white/5 text-slate-400 hover:text-white"
+                    onClick={() => setCategory("all")}
+                    className={`px-5 py-2.5 rounded-xl text-[10px] font-black transition-all tracking-widest border ${
+                      category === "all"
+                        ? "bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-600/20 ring-4 ring-blue-500/10 scale-105"
+                        : "bg-slate-900/40 border-white/5 text-slate-500 hover:text-slate-200 hover:bg-slate-800/60"
                     }`}
                   >
-                    {cat.toUpperCase()}
+                    TUDO
                   </button>
-                ))}
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setCategory(cat)}
+                      className={`px-5 py-2.5 rounded-xl text-[10px] font-black transition-all tracking-widest border ${
+                        category === cat
+                          ? "bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-600/20 ring-4 ring-blue-500/10 scale-105"
+                          : "bg-slate-900/40 border-white/5 text-slate-500 hover:text-slate-200 hover:bg-slate-800/60"
+                      }`}
+                    >
+                      {cat.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -91,89 +118,31 @@ export default function Catalog() {
               </motion.div>
             ) : (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
                 className="py-32 flex flex-col items-center text-center"
               >
-                <div className="w-24 h-24 rounded-[2rem] bg-slate-900 flex items-center justify-center mb-8 border border-white/5 shadow-2xl">
-                  <PackageOpen className="w-10 h-10 text-slate-700" />
+                <div className="relative w-32 h-32 flex items-center justify-center mb-8 group">
+                  <div className="absolute inset-0 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-all duration-500" />
+                  <div className="w-24 h-24 rounded-[2rem] bg-slate-900 flex items-center justify-center border border-white/5 shadow-2xl relative z-10 rotate-3 group-hover:rotate-0 transition-transform duration-500">
+                    <PackageOpen className="w-10 h-10 text-slate-600 group-hover:text-blue-500 transition-colors" />
+                  </div>
                 </div>
-                <h3 className="text-3xl font-black mb-4">Nenhum resultado</h3>
-                <p className="text-lg text-slate-500 max-w-md mx-auto mb-10">
-                  Tente remover os filtros ou pesquisar por termos mais genéricos.
+                <h3 className="text-3xl font-black mb-4 tracking-tight">Nenhum tesouro encontrado</h3>
+                <p className="text-lg text-slate-500 max-w-md mx-auto mb-10 leading-relaxed font-medium">
+                  Não encontramos nenhum modelo com estes filtros. Tente usar termos mais abrangentes ou limpe os filtros.
                 </p>
                 <button
                   onClick={() => { setQuery(""); setCategory("all"); }}
-                  className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black tracking-widest hover:bg-blue-500 transition-colors shadow-xl shadow-blue-500/20"
+                  className="group relative px-8 py-4 bg-slate-900 text-white rounded-2xl font-black tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-950/50 border border-white/5 overflow-hidden"
                 >
-                  VER TUDO
+                  <div className="absolute inset-0 bg-blue-500 translate-y-[100%] group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+                  <span className="relative z-10 group-hover:text-white transition-colors duration-300">LIMPAR FILTROS</span>
                 </button>
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
-      </section>
-
-      <section className="pb-32 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="group relative p-10 md:p-16 rounded-[3.5rem] bg-[#EE4D2D] text-white overflow-hidden shadow-2xl shadow-orange-500/20 transition-all duration-500 hover:shadow-orange-500/40">
-            {/* Background Decorations */}
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 transition-transform duration-700 group-hover:scale-110" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-[80px] translate-y-1/2 -translate-x-1/2" />
-            
-            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              <div className="text-center lg:text-left">
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-[0.2em] mb-8 border border-white/20">
-                  <ShoppingBag className="w-3 h-3" /> Compra Garantida
-                </div>
-                <h2 className="text-5xl md:text-7xl font-black mb-8 tracking-tighter leading-[0.9]">
-                  Inseguro com o <br/><span className="text-white/80">WhatsApp?</span>
-                </h2>
-                <p className="text-xl text-orange-50 font-medium mb-12 leading-relaxed max-w-xl mx-auto lg:mx-0">
-                  Sem problemas! Adquira nossos produtos através da nossa loja oficial na Shopee com toda a segurança e proteção que você já conhece.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                  <a 
-                    href="https://shopee.com.br/printh3d" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-3 bg-white text-[#EE4D2D] px-12 py-6 rounded-2xl font-black text-xl shadow-2xl transition-all hover:scale-105 active:scale-95 group/btn overflow-hidden relative"
-                  >
-                    <span className="relative z-10">COMPRAR PELA SHOPEE</span>
-                    <div className="absolute inset-0 bg-slate-100 translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300" />
-                  </a>
-                </div>
-              </div>
-
-              <div className="flex justify-center lg:justify-end">
-                <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center">
-                  {/* Floating Elements Background */}
-                  <div className="absolute inset-0 bg-white/5 rounded-full animate-pulse" />
-                  
-                  {/* Main Logo Container */}
-                  <div className="relative z-10 w-48 h-48 md:w-64 md:h-64 bg-white rounded-[3rem] shadow-2xl flex items-center justify-center -rotate-6 group-hover:rotate-0 transition-all duration-700 border-4 border-white/20 group-hover:scale-110">
-                    <div className="relative w-32 h-32 md:w-40 md:h-40">
-                      <Image 
-                        src="/assets/logos/shopee_logo.png" 
-                        alt="Shopee Logo" 
-                        fill 
-                        className="object-contain"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Decorative Sparkles/Floaties */}
-                  <div className="absolute top-0 right-0 w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl rotate-12 animate-bounce flex items-center justify-center">
-                    <ShoppingBag className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="absolute bottom-4 left-0 w-16 h-16 bg-white/10 backdrop-blur-md rounded-2xl -rotate-12 flex items-center justify-center">
-                    <div className="w-8 h-8 rounded-full bg-white/20" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
