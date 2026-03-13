@@ -29,7 +29,6 @@ export default function Navbar() {
   const navLinks = [
     { name: "Home", href: "/" },
     { name: "Produtos", href: "/produtos" },
-    { name: "Orçamento", href: "/orcamento" },
     { name: "Como Funciona", href: "/materiais" },
     { name: "Contato", href: "/contato" },
   ];

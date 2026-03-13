@@ -27,14 +27,14 @@ export default function Home() {
                 Pronto para dar vida à sua ideia?
               </h2>
               <p className="text-xl text-blue-100 mb-12 font-medium">
-                Faça uma simulação instantânea e descubra como é fácil e acessível imprimir em 3D.
+                Entre em contato com nossa equipe técnica e transforme seu projeto em realidade com precisão industrial.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <a 
-                  href="/orcamento" 
+                  href="/contato" 
                   className="px-12 py-5 bg-white text-blue-600 rounded-2xl font-black text-lg shadow-xl hover:scale-105 active:scale-95 transition-all"
                 >
-                  SIMULAR AGORA
+                  FALE CONOSCO
                 </a>
                 <a 
                   href="/produtos" 

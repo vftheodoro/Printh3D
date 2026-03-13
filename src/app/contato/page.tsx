@@ -115,7 +115,7 @@ export default function ContactPage() {
                   <MapPin className="w-8 h-8 text-blue-500" />
                   <div>
                     <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Localização</h4>
-                    <p className="text-lg font-bold text-white leading-tight">São Paulo & Litoral.<br/>Envio para todo o Brasil.</p>
+                    <p className="text-lg font-bold text-white leading-tight">Jacupiranga, SP.<br/>Envio para todo o Brasil.</p>
                   </div>
                </div>
                <div className="p-10 rounded-[3rem] bg-slate-900/50 border border-white/5 flex flex-col justify-between aspect-square">

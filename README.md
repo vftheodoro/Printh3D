@@ -9,7 +9,6 @@ A **Printh 3D** é uma plataforma moderna e premium especializada em serviços d
 ## ✨ Características Principais
 
 - **🎨 Design Premium**: Interface moderna com estética dark mode, glassmorphism e animações fluidas (Framer Motion).
-- **🖨️ Simulador de Orçamento**: Cálculo instantâneo de preços baseado em volume e material com prévia 3D interativa.
 - **📦 Catálogo de Produtos**: Galeria curada de modelos otimizados para diversas aplicações (Colecionáveis, Decoração, Industrial).
 - **📚 Central de Conhecimento**: Seção educativa sobre materiais (PLA, ABS, PETG, TPU) e processos de fabricação.
 - **🛍️ Integração Shopee**: Conexão direta com loja oficial na Shopee para compras com garantia da plataforma.

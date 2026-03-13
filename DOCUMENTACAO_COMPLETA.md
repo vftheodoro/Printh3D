@@ -11,7 +11,6 @@ A **Printh 3D** é uma plataforma digital premium voltada para serviços de impr
 - **Estilização**: Tailwind CSS
 - **Animações**: Framer Motion
 - **Ícones**: Lucide React
-- **Gráficos 3D**: React Three Fiber / Three.js (no Simulador de Orçamento)
 - **Deployment**: Otimizado para Vercel
 
 ---
@@ -22,14 +21,12 @@ src/
 ├── app/                  # Roteamento e Estrutura de Páginas
 │   ├── contato/          # Página de Contato e Redes Sociais
 │   ├── materias/         # Central de Informações e Materiais
-│   ├── orcamento/        # Simulador 3D de Orçamentos
 │   ├── produtos/         # Catálogo e Detalhes de Produtos
 │   ├── layout.tsx        # Layout Global (Fonts, Metadata, Nav/Footer)
 │   └── page.tsx          # Home Page (Hero, Features, FAQ)
 ├── components/           # Componentes Reutilizáveis
 │   ├── home/             # Componentes específicos da Home
 │   ├── layout/           # Componentes globais (Navbar, Footer, Floats)
-│   ├── orcamento/        # Componentes do simulador (3D Cube)
 │   └── products/         # Componentes do catálogo (Cards, Filters)
 ├── lib/                  # Lógica, Dados e Tipagens
 │   └── products.ts       # Base de dados de produtos e filtros
@@ -49,12 +46,7 @@ src/
 - **Destaques**: Exibição rápida dos principais itens do catálogo.
 - **FAQ**: Seção de dúvidas frequentes com interface sanfona (accordion).
 
-### 4.2 Simulador de Orçamento (3D)
-- **Visualização Interativa**: Um cubo 3D renderizado em tempo real que reflete as dimensões inseridas pelo usuário.
-- **Cálculo Automático**: Algoritmo que considera volume, preenchimento (infill), complexidade e material para gerar uma faixa de preço estimada.
-- **Conversão**: Gera uma mensagem estruturada para o WhatsApp com todos os detalhes técnicos do pedido.
-
-### 4.3 Catálogo de Produtos
+### 4.2 Catálogo de Produtos
 - **Filtros Dinâmicos**: Busca por nome e filtragem por categorias (Colecionáveis, Decoração, Industrial).
 - **Integração Shopee**: Card destacado com branding oficial da Shopee para clientes que preferem a segurança do marketplace.
 - **Detalhes**: Páginas dedicadas para cada produto com descrição completa e materiais disponíveis.
