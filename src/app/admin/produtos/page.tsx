@@ -49,11 +49,18 @@ export default function ProductsPage() {
         fetch(`/api/admin/products?search=${search}&category_id=${categoryFilter}`),
         fetch('/api/admin/categories')
       ]);
-      const [prodData, catData] = await Promise.all([prodRes.json(), catRes.json()]);
-      setProducts(prodData);
-      setCategories(catData);
+      const prodData = await prodRes.json();
+      const catData = await catRes.json();
+      
+      setProducts(Array.isArray(prodData) ? prodData : []);
+      setCategories(Array.isArray(catData) ? catData : []);
+      
+      if (prodData.error) console.error('Products API Error:', prodData.error);
+      if (catData.error) console.error('Categories API Error:', catData.error);
     } catch (err) {
       console.error(err);
+      setProducts([]);
+      setCategories([]);
     } finally {
       setLoading(false);
     }

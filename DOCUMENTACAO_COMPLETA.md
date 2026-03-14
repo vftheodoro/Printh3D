@@ -1,95 +1,77 @@
-# Documentação Completa — Printh 3D (Next.js Version)
+# Documentação Completa — Printh 3D Pro (Next.js + Supabase)
 
 ## 1. Visão Geral
-A **Printh 3D** é uma plataforma digital premium voltada para serviços de impressão 3D (manufatura aditiva). O projeto foi totalmente refatorado para uma arquitetura moderna utilizando **Next.js**, focando em performance, estética impecável (Premium Dark Mode) e conversão de vendas.
+A **Printh 3D** é uma plataforma digital premium voltada para serviços de impressão 3D (manufatura aditiva). O projeto evoluiu de uma SPA estática para uma aplicação Full-Stack moderna utilizando **Next.js 16** e **Supabase**, integrando um sistema administrativo (Admin Pro) robusto para gestão total do negócio.
 
 ---
 
 ## 2. Stack Tecnológica
-- **Framework**: Next.js 15 (App Router)
-- **Linguagem**: TypeScript
-- **Estilização**: Tailwind CSS
+- **Framework**: Next.js 16 (App Router)
+- **Backend-as-a-Service**: Supabase (PostgreSQL, Auth, Storage)
+- **Segurança**: JWT (`jose`), Cookies `httpOnly`, Hashing `bcryptjs`
+- **Estilização**: CSS Vanilla (Admin) / Tailwind CSS (Site Público)
 - **Animações**: Framer Motion
 - **Ícones**: Lucide React
-- **Deployment**: Otimizado para Vercel
+- **Gráficos**: Chart.js
 
 ---
 
-## 3. Arquitetura de Pastas
-```text
-src/
-├── app/                  # Roteamento e Estrutura de Páginas
-│   ├── contato/          # Página de Contato e Redes Sociais
-│   ├── materias/         # Central de Informações e Materiais
-│   ├── produtos/         # Catálogo e Detalhes de Produtos
-│   ├── layout.tsx        # Layout Global (Fonts, Metadata, Nav/Footer)
-│   └── page.tsx          # Home Page (Hero, Features, FAQ)
-├── components/           # Componentes Reutilizáveis
-│   ├── home/             # Componentes específicos da Home
-│   ├── layout/           # Componentes globais (Navbar, Footer, Floats)
-│   └── products/         # Componentes do catálogo (Cards, Filters)
-├── lib/                  # Lógica, Dados e Tipagens
-│   └── products.ts       # Base de dados de produtos e filtros
-└── public/               # Assets Estáticos
-    └── assets/
-        ├── imagens/      # Fotos de produtos e processos (IA Generated)
-        └── logos/        # Logotipos oficiais (Printh3D, Shopee)
+## 3. Arquitetura do Sistema
+
+### 3.1 Site Público
+Voltado para vendas e divulgação, focado em SEO e performance.
+- **Catálogo Dinâmico**: Busca produtos e categorias diretamente do Supabase via Server Components.
+- **Fallback de Dados**: Sistema de segurança que carrega produtos estáticos caso o banco de dados esteja inacessível.
+- **SEO**: Metadados dinâmicos para cada página de produto.
+
+### 3.2 Sistema Administrativo (/admin)
+Replica exata do sistema original "Printh3D Pro", agora integrado ao banco de dados na nuvem.
+- **Dashboard**: 13 KPIs e 4 gráficos de desempenho integrados.
+- **Gestão (CRUD)**: Categorias, Produtos, Vendas, Gastos, Clientes, Promoções e Usuários.
+- **Calculadora Pro**: Simulador de custos de 4 etapas que permite salvar resultados como novos produtos.
+- **Lixeira**: Sistema de soft-delete para recuperação de dados excluídos acidentalmente.
+- **Migração & Backup**: Ferramentas para importar dados do sistema antigo (IndexedDB) e exportar backups em JSON.
+
+---
+
+## 4. Segurança e Autenticação
+- **Autenticação Customizada**: Não utiliza o Supabase Auth padrão para facilitar o bypass de e-mail e manter compatibilidade com o login do sistema antigo.
+- **JWT**: Tokens gerados no servidor e armazenados em cookies `httpOnly` para evitar ataques XSS.
+- **Middleware**: Interceptação de todas as rotas `/admin/*` para garantir que apenas usuários autenticados acessem o painel.
+- **Rate Limiting**: Proteção básica de tentativas de login por IP.
+
+---
+
+## 5. Banco de Dados (Supabase)
+O esquema do banco de dados consiste em 12 tabelas principais, espelhando os "stores" do IndexedDB original:
+- `admin_users`, `categories`, `products`, `product_files`, `sales`, `sale_files`, `clients`, `expenses`, `promotions`, `coupons`, `settings`, `trash`.
+
+---
+
+## 6. Configuração e Variáveis de Ambiente
+Crie um arquivo `.env.local` na raiz com os seguintes dados:
+```env
+NEXT_PUBLIC_SUPABASE_URL=seu-url-do-supabase
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
+SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
+ADMIN_JWT_SECRET=segredo-gerado-aleatoriamente
 ```
 
 ---
 
-## 4. Principais Seções e Funcionalidades
-
-### 4.1 Home Page
-- **Hero Section**: Animação de partículas dinâmica, efeito de vidro (glassmorphism) e branding forte.
-- **Processo (Features)**: Apresentação visual das etapas de produção com imagens cinematográficas reais de impressão 3D.
-- **Destaques**: Exibição rápida dos principais itens do catálogo.
-- **FAQ**: Seção de dúvidas frequentes com interface sanfona (accordion).
-
-### 4.2 Catálogo de Produtos
-- **Filtros Dinâmicos**: Busca por nome e filtragem por categorias (Colecionáveis, Decoração, Industrial).
-- **Integração Shopee**: Card destacado com branding oficial da Shopee para clientes que preferem a segurança do marketplace.
-- **Detalhes**: Páginas dedicadas para cada produto com descrição completa e materiais disponíveis.
-
-### 4.4 Central de Materiais ("Como Funciona")
-- **Educação do Cliente**: Explicações detalhadas sobre PLA, ABS, PETG e TPU.
-- **Diferenciação**: Mostra aplicações reais e objetos do dia a dia feitos com cada material para facilitar a escolha do usuário.
-- **Imagens Reais**: Fotos de alta performance geradas para ilustrar cada tipo de filamento.
-
-### 4.5 Contato e Redes Sociais
-- **Social Branding**: Cards estilizados com as cores oficiais de Instagram, TikTok, Facebook e Shopee.
-- **Canais Diretos**: WhatsApp e E-mail integrados com fácil acesso.
-- **Floating CTA**: Botão flutuante do WhatsApp presente em todas as páginas para suporte imediato.
+## 7. Manutenção de Conteúdo
+- **Imagens**: O site público utiliza `public/assets/imagens`. O sistema admin permite gerenciamento via Supabase Storage.
+- **Site**: Para alterações na Home ou Materiais, os componentes estão em `src/app/`.
+- **Produtos**: O gerenciamento deve ser feito agora INTEGRALMENTE via painel administrativo em `/admin`.
 
 ---
 
-## 5. Design System
-- **Tema**: Dark Mode Premium (Slate-950 / Black).
-- **Cores**:
-  - Azul Printh3D: `blue-500` / `blue-600`
-  - Acentos: Teal, Emerald (sutis em ícones)
-  - Erro/Status: Red-500
-- **Tipografia**: **Outfit** (via Google Fonts), escolhida por sua legibilidade e ar tecnológico.
-- **Visual**: Uso extensivo de `backdrop-blur`, bordas semitransparentes (`white/5`) e sombras projetadas (glows).
+## 8. Guia de Deploy
+1. Subir o repositório para o GitHub.
+2. Conectar à Vercel.
+3. Importar as Variáveis de Ambiente.
+4. Executar o script SQL no editor do Supabase Dashboard.
+5. Fazer login em `/admin/login`.
 
 ---
-
-## 6. Configurações e Manutenção
-
-### 6.1 Cadastro de Produtos
-Para adicionar ou editar produtos, edite o arquivo `src/lib/products.ts`. Certifique-se de associar imagens existentes na pasta `public/assets/imagens`.
-
-### 6.2 SEO e Metadados
-Os metadados globais (Título, Favicon, Descrição) são configurados em `src/app/layout.tsx`. O favicon oficial é o logo da Printh 3D.
-
----
-
-## 7. Próximos Passos (Roadmap)
-- [ ] Implementar sistema de upload de arquivos STL diretamente no simulador.
-- [ ] Adicionar sistema de checkout real (Stripe/Mercado Pago) se necessário.
-- [ ] Dashboard administrativo para gerenciamento de catálogo via CMS (Sanity/Strapi).
-- [ ] Galeria de fotos enviadas por clientes (Social Proof).
-
----
-
-*Documentação atualizada em 12 de Março de 2026.*
+*Documentação atualizada em 14 de Março de 2026 após migração bem-sucedida.*

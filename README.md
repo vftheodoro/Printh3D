@@ -1,31 +1,30 @@
-# 🚀 Printh 3D — Impressão 3D de Alta Performance
+# 🚀 Printh 3D Pro — Impressão 3D de Alta Performance
 
 ![Printh3D Banner](public/assets/imagens/materials_hero.png)
 
-A **Printh 3D** é uma plataforma moderna e premium especializada em serviços de manufatura aditiva (impressão 3D) personalizada. Transformamos conceitos digitais em objetos físicos com precisão industrial, focando em uma experiência de usuário impecável e resultados de alta fidelidade.
+A **Printh 3D** agora é uma plataforma completa e profissional para gestão e venda de serviços de impressão 3D. O projeto foi migrado para **Next.js 16** com **Supabase**, unificando o site institucional com o sistema de gestão **Printh3D Pro**.
 
 ---
 
 ## ✨ Características Principais
 
-- **🎨 Design Premium**: Interface moderna com estética dark mode, glassmorphism e animações fluidas (Framer Motion).
-- **📦 Catálogo de Produtos**: Galeria curada de modelos otimizados para diversas aplicações (Colecionáveis, Decoração, Industrial).
-- **📚 Central de Conhecimento**: Seção educativa sobre materiais (PLA, ABS, PETG, TPU) e processos de fabricação.
-- **🛍️ Integração Shopee**: Conexão direta com loja oficial na Shopee para compras com garantia da plataforma.
-- **📱 Ultra Responsivo**: Otimização completa para dispositivos móveis, garantindo a melhor experiência em qualquer tela.
+- **🎨 Design Premium**: Interface moderna com estética dark mode e glassmorphism.
+- **🔐 Admin Pro**: Sistema de gestão completo em `/admin` com controle de estoque, vendas e clientes.
+- **📊 Dashboard Inteligente**: Monitoramento de vendas, lucros e gastos em tempo real com gráficos interativos.
+- **🖩 Calculadora Industrial**: Cálculo preciso de custos de filamento, hora-máquina, energia e impostos.
+- **📦 Catálogo Dinâmico**: Gerenciamento de produtos em tempo real via banco de dados na nuvem.
+- **♻️ Sistema de Lixeira**: Proteção contra exclusão acidental de dados importantes.
 
 ---
 
 ## 🛠️ Tecnologias Utilizadas
 
-O projeto foi construído utilizando as tecnologias mais modernas do ecossistema Web:
-
-- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
+- **Backend / DB**: [Supabase](https://supabase.com/) (PostgreSQL)
+- **Security**: [Jose](https://github.com/panva/jose) (JWT) & [BcryptJS](https://github.com/dcodeIO/bcrypt.js)
 - **Estilização**: [Tailwind CSS](https://tailwindcss.com/)
 - **Animações**: [Framer Motion](https://www.framer.com/motion/)
 - **Ícones**: [Lucide React](https://lucide.dev/)
-- **Linguagem**: [TypeScript](https://www.typescriptlang.org/)
-- **Visualização 3D**: [React Three Fiber](https://docs.pmnd.rs/react-three-fiber/getting-started/introduction) (para o cubo do simulador)
 
 ---
 
@@ -33,7 +32,7 @@ O projeto foi construído utilizando as tecnologias mais modernas do ecossistema
 
 ### Pré-requisitos
 - Node.js (v18+)
-- npm ou yarn
+- Conta no [Supabase](https://supabase.com/)
 
 ### Instalação
 1. Clone o repositório:
@@ -46,12 +45,18 @@ git clone https://github.com/vftheodoro/Printh3D_Site.git
 npm install
 ```
 
-3. Inicie o servidor de desenvolvimento:
+3. Configure as variáveis de ambiente em `.env.local`:
+```env
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+ADMIN_JWT_SECRET=...
+```
+
+4. Inicie o servidor:
 ```bash
 npm run dev
 ```
-
-4. Acesse `http://localhost:3000` no seu navegador.
 
 ---
 
@@ -60,34 +65,22 @@ npm run dev
 ```text
 src/
 ├── app/              # Rotas e Páginas (Next.js App Router)
-│   ├── contato/      # Página de Contato e Redes Sociais
-│   ├── materias/     # Guia técnico de materiais
-│   ├── orcamento/    # Simulador interativo de orçamento
-│   └── produtos/     # Catálogo de modelos
-├── components/       # Componentes React reutilizáveis
-│   ├── home/         # Hero, Features, FAQ
-│   ├── layout/       # Navbar, Footer
-│   └── products/     # Cards de produtos e filtros
-├── lib/              # Lógica de negócios e dados (produtos, utilitários)
-└── public/           # Assets estáticos (Images, Logos, Favicon)
+│   ├── admin/        # Sistema Administrativo Pro
+│   ├── api/          # Endpoints da API (CRUD, Auth, Migration)
+│   ├── produtos/     # Catálogo Público Dinâmico
+│   └── ...           # Outras páginas institucionais
+├── components/       # Componentes React
+├── lib/              # Supabase Client, Auth Helpers e Lógica de Produtos
+└── public/           # Assets estáticos
 ```
-
----
-
-## 🎨 Identidade Visual
-
-- **Primária**: Azul Printh3D (`#3B82F6`)
-- **Fundo**: Slate Deep Dark (`#020617`)
-- **Tipografia**: Outfit (Google Fonts)
 
 ---
 
 ## 👨‍💻 Desenvolvido por
 
 **Victor Theodoro**
-- [Portfólio](https://vftheodoro.github.io/Portfolio/)
 - [LinkedIn](https://www.linkedin.com/in/victor-theodoro-braz-teixeira-603125206/)
 
 ---
 
-*Transformando bits em átomos com precisão e estilo.* 🛠️✨
+*Transformando bits em átomos com precisão industrial e design impecável.* 🛠️✨

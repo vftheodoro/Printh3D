@@ -5,8 +5,9 @@ import { Metadata } from "next";
 export const revalidate = 60;
 
 // Dynamic metadata for SEO
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const product = await getProductById(params.id);
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const product = await getProductById(id);
   if (!product) return { title: "Produto Não Encontrado | Printh3D" };
   
   return {
@@ -18,8 +19,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function ProductPage({ params }: { params: { id: string } }) {
-  const product = await getProductById(params.id);
+export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const product = await getProductById(id);
 
   return <ProductDetailClient product={product} />;
 }
