@@ -1,14 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { PRODUCTS } from "@/lib/products";
+import { getAllProducts } from "@/lib/products";
 import ProductCard from "@/components/products/ProductCard";
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
 
-export default function FeaturedProducts() {
+export default async function FeaturedProducts() {
   // Pegamos os 3 primeiros produtos para destaque
-  const featured = PRODUCTS.slice(0, 3);
+  const allProducts = await getAllProducts();
+  const featured = allProducts.slice(0, 3);
 
   return (
     <section className="py-32 px-6 bg-slate-950">

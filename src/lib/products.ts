@@ -1,8 +1,11 @@
+import { supabase } from './supabase';
+
 export interface Product {
-  id: string;
+  id: string; // SKU or DB id as string
   name: string;
   category: string;
   price: number;
+  promotional_price?: number;
   material: string;
   image: string;
   shortDesc: string;
@@ -11,7 +14,7 @@ export interface Product {
   finishes: string[];
 }
 
-export const PRODUCTS: Product[] = [
+export const FALLBACK_PRODUCTS: Product[] = [
   // COLECIONÁVEIS / GEEK
   {
     id: "action-figure-hero",
@@ -127,23 +130,81 @@ export const PRODUCTS: Product[] = [
   }
 ];
 
-export function getAllProducts() {
-  return PRODUCTS;
+// Helper to convert DB product to Frontend Product interface
+function mapDbProductToFrontend(dbProd: any): Product {
+  // Try to find a primary image from product_files or fallback
+  let defaultImage = "/assets/imagens/design_screen.png";
+  if (dbProd.product_files && dbProd.product_files.length > 0) {
+    // Assuming storage_path is the public URL or relative path
+    defaultImage = dbProd.product_files[0].storage_path;
+  }
+
+  return {
+    id: dbProd.codigo_sku || dbProd.id.toString(),
+    name: dbProd.nome,
+    category: dbProd.categories?.nome?.toLowerCase() || 'geral',
+    price: dbProd.preco_venda || 0,
+    promotional_price: dbProd.preco_promocional,
+    material: dbProd.material || 'PLA',
+    image: defaultImage,
+    shortDesc: dbProd.descricao?.substring(0, 80) + '...' || 'Produto de impressão 3D',
+    fullDesc: dbProd.descricao || 'Detalhes do produto não informados.',
+    colors: dbProd.cor ? dbProd.cor.split(',').map((c:string) => c.trim()) : ["Padrão"],
+    finishes: ["Natural"]
+  };
 }
 
-export function getProductById(id: string) {
-  return PRODUCTS.find(p => p.id === id);
+export async function getAllProducts(): Promise<Product[]> {
+  try {
+    // Fetch only active products
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, categories(nome), product_files(storage_path)')
+      .eq('ativo', true)
+      .order('id', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+       console.warn('Could not fetch from Supabase, returning FALLBACK', error?.message);
+       return FALLBACK_PRODUCTS;
+    }
+
+    return data.map(mapDbProductToFrontend);
+  } catch (err) {
+    console.error('Error in getAllProducts:', err);
+    return FALLBACK_PRODUCTS;
+  }
 }
 
-export function getCategories() {
-  return Array.from(new Set(PRODUCTS.map(p => p.category)));
+export async function getProductById(id: string): Promise<Product | undefined> {
+  try {
+    // Check if ID is likely a numeric ID or a string SKU
+    const isNumeric = /^\d+$/.test(id);
+    let query = supabase.from('products').select('*, categories(nome), product_files(storage_path)').eq('ativo', true);
+    
+    if (isNumeric) query = query.eq('id', parseInt(id));
+    else query = query.eq('codigo_sku', id);
+
+    const { data, error } = await query.single();
+
+    if (error || !data) {
+       // Fallback search
+       return FALLBACK_PRODUCTS.find(p => p.id === id);
+    }
+    return mapDbProductToFrontend(data);
+
+  } catch (err) {
+    return FALLBACK_PRODUCTS.find(p => p.id === id);
+  }
 }
 
-export function filterProducts(query: string, category: string) {
-  return PRODUCTS.filter(p => {
-    const matchesQuery = p.name.toLowerCase().includes(query.toLowerCase()) || 
-                        p.shortDesc.toLowerCase().includes(query.toLowerCase());
-    const matchesCategory = category === "all" || p.category === category;
-    return matchesQuery && matchesCategory;
-  });
+export async function getCategories(): Promise<string[]> {
+  try {
+    const { data } = await supabase.from('categories').select('nome');
+    if (data && data.length > 0) {
+       return data.map(c => c.nome.toLowerCase());
+    }
+    return Array.from(new Set(FALLBACK_PRODUCTS.map(p => p.category)));
+  } catch (err) {
+    return Array.from(new Set(FALLBACK_PRODUCTS.map(p => p.category)));
+  }
 }

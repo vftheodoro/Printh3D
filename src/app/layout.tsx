@@ -1,12 +1,6 @@
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
 import "./globals.css";
 import BackToTop from "@/components/layout/BackToTop";
-
-const outfit = Outfit({
-  variable: "--font-outfit",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Printh 3D",
@@ -23,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${outfit.variable} antialiased font-sans`}>
+      <body className="antialiased font-sans flex flex-col min-h-screen relative">
         {children}
         <BackToTop />
       </body>
