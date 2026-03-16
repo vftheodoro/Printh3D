@@ -207,12 +207,12 @@ export default function PromotionsPage() {
         <h1><Tag /> Promoções & Cupons</h1>
       </div>
 
-      <div className="modal-tabs" style={{ background: 'transparent', padding: 0, marginBottom: '1.5rem', borderBottom: '2px solid var(--border)' }}>
-        <button className={`tab-btn ${activeTab === 'promotions' ? 'active' : ''}`} onClick={() => setActiveTab('promotions')} style={{ fontSize: '1rem', padding: '1rem 2rem' }}>
-          <Tag size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom' }}/> Produtos
+      <div className="page-tabs">
+        <button className={`page-tab ${activeTab === 'promotions' ? 'active' : ''}`} onClick={() => setActiveTab('promotions')}>
+          <Tag size={16} /> Produtos
         </button>
-        <button className={`tab-btn ${activeTab === 'coupons' ? 'active' : ''}`} onClick={() => setActiveTab('coupons')} style={{ fontSize: '1rem', padding: '1rem 2rem' }}>
-          <Ticket size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom' }}/> Cupons de Desconto
+        <button className={`page-tab ${activeTab === 'coupons' ? 'active' : ''}`} onClick={() => setActiveTab('coupons')}>
+          <Ticket size={16} /> Cupons de Desconto
         </button>
       </div>
 
@@ -255,9 +255,9 @@ export default function PromotionsPage() {
                       {p.ativo ? <span style={{ color: 'var(--success)', fontSize: '0.8rem' }}>Ativa</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Inativa</span>}
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <div className="action-btns">
                         <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openPromoModal(p)}><Edit2 size={14} /></button>
-                        <button className="btn btn-danger" style={{ padding: '0.4rem', background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger-light)' }} onClick={() => handlePromoDelete(p.id)}><Trash2 size={14} /></button>
+                        <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handlePromoDelete(p.id)}><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -296,9 +296,9 @@ export default function PromotionsPage() {
                     <td>{c.usos_realizados} / {c.limite_usos > 0 ? c.limite_usos : '∞'}</td>
                     <td>{c.ativo ? <span style={{ color: 'var(--success)' }}>Ativo</span> : <span style={{ color: 'var(--text-muted)' }}>Inativo</span>}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <div className="action-btns">
                         <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openCouponModal(c)}><Edit2 size={14} /></button>
-                        <button className="btn btn-danger" style={{ padding: '0.4rem', background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger-light)' }} onClick={() => handleCouponDelete(c.id)}><Trash2 size={14} /></button>
+                        <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handleCouponDelete(c.id)}><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -363,7 +363,7 @@ export default function PromotionsPage() {
 
               </form>
             </div>
-            <div className="modal-header" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', justifyContent: 'flex-end', gap: '0.8rem' }}>
+            <div className="modal-footer">
               <button type="submit" form="promo-form" className="btn btn-primary">Salvar Promoção</button>
             </div>
           </div>
@@ -417,7 +417,7 @@ export default function PromotionsPage() {
 
               </form>
             </div>
-            <div className="modal-header" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', justifyContent: 'flex-end', gap: '0.8rem' }}>
+            <div className="modal-footer">
               <button type="submit" form="coupon-form" className="btn btn-primary">Salvar Cupom</button>
             </div>
           </div>

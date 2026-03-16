@@ -110,22 +110,22 @@ export default function TrashPage() {
                   <td style={{ color: 'var(--text-muted)' }}>#{item.id}</td>
                   <td><strong>{item.item_name}</strong></td>
                   <td>
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', background: 'var(--bg-input)', borderRadius: '10px', color: 'var(--text-secondary)' }}>
+                    <span className="status-badge badge-neutral">
                       {storeLabels[item.source_store] || item.source_store}
                     </span>
                   </td>
                   <td>{delDate.toLocaleDateString('pt-BR')} às {delDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
                   <td>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: daysLeft <= 3 ? 'var(--danger)' : 'var(--warning)', fontWeight: 600 }}>
-                      <AlertCircle size={14} /> {daysLeft} dia(s)
+                    <span className={`status-badge ${daysLeft <= 3 ? 'badge-danger' : 'badge-warning'}`}>
+                      <AlertCircle size={12} /> {daysLeft} dia(s)
                     </span>
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                      <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', gap: '6px' }} onClick={() => handleRestore(item.id, item.item_name)}>
+                      <div className="action-btns">
+                      <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleRestore(item.id, item.item_name)}>
                         <RefreshCcw size={14} /> Restaurar
                       </button>
-                      <button className="btn btn-danger" style={{ padding: '0.4rem', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }} onClick={() => handlePermanentDelete(item.id, item.item_name)} title="Excluir Definitivamente">
+                      <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => handlePermanentDelete(item.id, item.item_name)} title="Excluir Definitivamente">
                         <Trash2 size={14} />
                       </button>
                     </div>

@@ -24,7 +24,13 @@ export default function ProductCard({ product }: { product: Product }) {
       <Link href={`/produtos/${product.id}`} className="block relative aspect-square overflow-hidden bg-slate-950">
         {product.image ? (
           <Image
-            src={product.image.startsWith('/') ? product.image : `/assets/imagens/${product.image}`}
+            src={
+              product.image.startsWith('http://') || product.image.startsWith('https://')
+                ? product.image
+                : product.image.startsWith('/')
+                  ? product.image
+                  : `/assets/imagens/${product.image}`
+            }
             alt={product.name}
             fill
             className="object-cover transition-transform duration-700 group-hover:scale-110"
@@ -62,7 +68,10 @@ export default function ProductCard({ product }: { product: Product }) {
         <div className="mt-auto flex items-center justify-between pt-8 border-t border-white/5">
           <div className="flex flex-col">
             <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Budget Base</span>
-            <span className="text-2xl font-black text-white tracking-tighter">R$ {product.price.toFixed(2)}</span>
+            <span className="text-2xl font-black text-white tracking-tighter">R$ {(product.promotional_price ?? product.price).toFixed(2)}</span>
+            {product.promotional_price && (
+              <span className="text-xs text-slate-500 line-through">R$ {product.price.toFixed(2)}</span>
+            )}
           </div>
           <a
             href="https://wa.me/5513997553465"

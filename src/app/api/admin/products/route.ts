@@ -10,7 +10,8 @@ export async function GET(request: Request) {
     const supabase = getAdminSupabase();
     let query = supabase.from('products').select(`
       *,
-      category:categories(nome, cor)
+      category:categories(nome, cor),
+      product_files(id, storage_path, tipo)
     `).order('created_at', { ascending: false });
 
     if (categoryId) {

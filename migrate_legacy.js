@@ -13,11 +13,19 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const DATA_DIR = 'c:/Users/fatec-dsm1/Desktop/Printh3D_Site/printh3d_data/data';
-const FILES_DIR = 'c:/Users/fatec-dsm1/Desktop/Printh3D_Site/printh3d_data/files/images';
+const BASE_DIR = path.resolve(process.env.LEGACY_BASE_DIR || path.join(process.cwd(), 'printh3d_data'));
+const DATA_DIR = path.resolve(process.env.LEGACY_DATA_DIR || path.join(BASE_DIR, 'data'));
+
+if (!fs.existsSync(DATA_DIR)) {
+  console.error(`Legacy data directory not found: ${DATA_DIR}`);
+  console.log('Set LEGACY_BASE_DIR or LEGACY_DATA_DIR and try again.');
+  process.exit(1);
+}
 
 async function migrate() {
   console.log('Starting migration...');
+  console.log(`Using legacy base directory: ${BASE_DIR}`);
+  console.log(`Using legacy data directory: ${DATA_DIR}`);
 
   // 1. Categories
   console.log('Migrating categories...');
@@ -40,20 +48,33 @@ async function migrate() {
   // 4. File Uploads (Storage)
   console.log('Migrating files to storage...');
   const filesMeta = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'product_files_meta.json'), 'utf8'));
+  const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'printh3d-files';
   
   // Create bucket if not exists
-  await supabase.storage.createBucket('product-files', { public: true });
+  const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+  if (bucketsError) {
+    console.error('Could not list storage buckets:', bucketsError.message);
+    process.exit(1);
+  }
+
+  if (!buckets?.some((bucket) => bucket.name === bucketName)) {
+    const { error: bucketError } = await supabase.storage.createBucket(bucketName, { public: true });
+    if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already exists')) {
+      console.error('Could not create storage bucket:', bucketError.message);
+      process.exit(1);
+    }
+  }
 
   for (const meta of filesMeta) {
-    const fileName = path.basename(meta.relative_path);
-    const filePath = path.join(FILES_DIR, fileName);
+    const fileName = path.basename(meta.relative_path || 'arquivo');
+    const filePath = path.join(BASE_DIR, meta.relative_path || '');
     
     if (fs.existsSync(filePath)) {
       const fileBuffer = fs.readFileSync(filePath);
       const { data: uploadData, error: uploadErr } = await supabase.storage
-        .from('product-files')
+        .from(bucketName)
         .upload(`products/${fileName}`, fileBuffer, {
-          contentType: meta.mime_type,
+          contentType: meta.mime_type || 'application/octet-stream',
           upsert: true
         });
 
@@ -63,7 +84,7 @@ async function migrate() {
       }
 
       // 5. Product Files Table
-      const publicUrl = supabase.storage.from('product-files').getPublicUrl(`products/${fileName}`).data.publicUrl;
+      const publicUrl = supabase.storage.from(bucketName).getPublicUrl(`products/${fileName}`).data.publicUrl;
       const { error: metaErr } = await supabase.from('product_files').upsert({
         id: meta.id,
         product_id: meta.product_id,

@@ -70,6 +70,16 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Login error:', error);
+    if (
+      typeof error?.message === 'string' &&
+      (error.message.includes('Missing required environment variable') ||
+        (error.message.includes('Missing ') && error.message.includes('environment variable')))
+    ) {
+      return NextResponse.json(
+        { error: 'Configuração do servidor incompleta. Defina as variáveis de ambiente do Supabase e ADMIN_JWT_SECRET e tente novamente.' },
+        { status: 500 }
+      );
+    }
     return NextResponse.json({ error: 'Erro interno no servidor.' }, { status: 500 });
   }
 }

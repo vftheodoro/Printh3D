@@ -201,9 +201,9 @@ export default function ExpensesPage() {
                   <td>{exp.tipo_pagamento}</td>
                   <td style={{ fontWeight: 600, color: 'var(--danger)' }}>{formatMoney(exp.valor_total)}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      <div className="action-btns">
                       <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openModal(exp)}><Edit2 size={14} /></button>
-                      <button className="btn btn-danger" style={{ padding: '0.4rem', background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger-light)' }} onClick={() => handleDelete(exp.id)}><Trash2 size={14} /></button>
+                      <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handleDelete(exp.id)}><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -286,7 +286,7 @@ export default function ExpensesPage() {
               </form>
             </div>
             
-            <div className="modal-header" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', background: 'transparent', justifyContent: 'flex-end', gap: '0.8rem' }}>
+            <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
               <button type="submit" form="expense-form" className="btn btn-primary">Salvar Gasto</button>
             </div>

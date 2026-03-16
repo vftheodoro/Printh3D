@@ -126,11 +126,11 @@ export default function CategoriesPage() {
                     </span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div className="action-btns">
                   <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openModal(cat)}>
                     <Edit2 size={14} />
                   </button>
-                  <button className="btn btn-danger" style={{ padding: '0.4rem', background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger-light)' }} onClick={() => handleDelete(cat.id)}>
+                  <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handleDelete(cat.id)}>
                     <Trash2 size={14} />
                   </button>
                 </div>

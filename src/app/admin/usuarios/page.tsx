@@ -127,20 +127,20 @@ export default function UsersPage() {
                 <td>{user.email}</td>
                 <td>
                   {user.tipo === 'ADMIN' ? (
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '4px', border: '1px solid rgba(239,68,68,0.3)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span className="status-badge badge-danger">
                       <Shield size={12}/> Administrador
                     </span>
                   ) : (
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'rgba(56, 189, 248, 0.1)', color: 'var(--info)', borderRadius: '4px', border: '1px solid rgba(56,189,248,0.3)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span className="status-badge badge-info">
                       <Key size={12}/> Vendedor
                     </span>
                   )}
                 </td>
                 <td style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <div className="action-btns">
                     <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openModal(user)}><Edit2 size={14} /></button>
                     {user.id !== 1 && (
-                      <button className="btn btn-danger" style={{ padding: '0.4rem', background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger-light)' }} onClick={() => handleDelete(user.id)}><Trash2 size={14} /></button>
+                      <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handleDelete(user.id)}><Trash2 size={14} /></button>
                     )}
                   </div>
                 </td>
@@ -186,7 +186,7 @@ export default function UsersPage() {
               </form>
             </div>
             
-            <div className="modal-header" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', background: 'transparent', justifyContent: 'flex-end', gap: '0.8rem' }}>
+            <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
               <button type="submit" form="user-form" className="btn btn-primary">Salvar Usuário</button>
             </div>

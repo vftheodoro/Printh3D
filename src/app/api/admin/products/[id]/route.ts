@@ -1,6 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase';
 
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const supabase = getAdminSupabase();
+
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, category:categories(nome, cor), product_files(*)')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return NextResponse.json(data);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

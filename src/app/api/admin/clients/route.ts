@@ -1,6 +1,40 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase';
 
+async function insertClientSafely(supabase: ReturnType<typeof getAdminSupabase>, input: any) {
+  const payload = { ...input };
+  delete payload.id;
+
+  const firstTry = await supabase.from('clients').insert([payload]).select().single();
+  if (!firstTry.error) {
+    return firstTry;
+  }
+
+  const isDuplicatePk = firstTry.error.code === '23505' || firstTry.error.message?.includes('clients_pkey');
+  if (!isDuplicatePk) {
+    return firstTry;
+  }
+
+  // Fallback when sequence is out of sync: explicitly use max(id)+1.
+  const { data: lastClient, error: maxErr } = await supabase
+    .from('clients')
+    .select('id')
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (maxErr) {
+    return { data: null, error: maxErr };
+  }
+
+  const safeId = (Number(lastClient?.id) || 0) + 1;
+  return supabase
+    .from('clients')
+    .insert([{ ...payload, id: safeId }])
+    .select()
+    .single();
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -9,7 +43,7 @@ export async function GET(request: Request) {
     const supabase = getAdminSupabase();
     let query = supabase.from('clients').select(`
       *,
-      sales(count, valor_venda, valor_devido)
+      sales(valor_venda, valor_devido)
     `).order('created_at', { ascending: false });
 
     if (search) {
@@ -44,7 +78,7 @@ export async function POST(request: Request) {
     const json = await request.json();
     const supabase = getAdminSupabase();
 
-    const { data, error } = await supabase.from('clients').insert([json]).select().single();
+    const { data, error } = await insertClientSafely(supabase, json);
 
     if (error) throw error;
     return NextResponse.json(data);

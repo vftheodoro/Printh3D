@@ -112,15 +112,14 @@ export default function ClientsPage() {
         </button>
       </div>
 
-      <div className="card" style={{ padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', padding: '0 0.8rem' }}>
-          <Search size={16} style={{ color: 'var(--text-muted)' }} />
+      <div className="page-toolbar">
+        <div className="toolbar-search">
+          <Search size={16} />
           <input 
             type="text" 
             placeholder="Buscar por nome ou WhatsApp..." 
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ border: 'none', background: 'transparent', width: '100%', outline: 'none', padding: '0.6rem', color: 'var(--text)' }}
           />
         </div>
       </div>
@@ -176,11 +175,11 @@ export default function ClientsPage() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <div className="action-btns" style={{ marginTop: '1rem' }}>
              <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => openModal(client)}>
                <Edit2 size={14} /> Editar
              </button>
-             <button className="btn btn-danger" style={{ padding: '0.4rem', background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger-light)' }} onClick={() => handleDelete(client.id)}>
+             <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handleDelete(client.id)}>
                <Trash2 size={14} />
              </button>
             </div>
@@ -234,7 +233,7 @@ export default function ClientsPage() {
               </form>
             </div>
             
-            <div className="modal-header" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', background: 'transparent', justifyContent: 'flex-end', gap: '0.8rem' }}>
+            <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
               <button type="submit" form="client-form" className="btn btn-primary">Salvar Cliente</button>
             </div>

@@ -12,11 +12,31 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const BASE_DIR = 'C:/Users/fatec-dsm1/Desktop/Printh3D_Site/printh3d_data/printh3d_data';
-const DATA_DIR = path.join(BASE_DIR, 'data');
+function resolveLegacyBaseDir() {
+  const explicitBase = process.env.LEGACY_BASE_DIR;
+  if (explicitBase) return path.resolve(explicitBase);
+
+  const dataDir = process.env.LEGACY_DATA_DIR;
+  if (dataDir) return path.resolve(dataDir, '..');
+
+  return path.resolve(process.cwd(), 'printh3d_data');
+}
+
+const BASE_DIR = resolveLegacyBaseDir();
+const DATA_DIR = process.env.LEGACY_DATA_DIR
+  ? path.resolve(process.env.LEGACY_DATA_DIR)
+  : path.join(BASE_DIR, 'data');
+
+if (!fs.existsSync(DATA_DIR)) {
+  console.error(`Legacy data directory not found: ${DATA_DIR}`);
+  console.error('Set LEGACY_BASE_DIR or LEGACY_DATA_DIR before running migration.');
+  process.exit(1);
+}
 
 async function syncAll() {
   console.log('--- STARTING FINAL CLEAN SYNC ---');
+  console.log(`Using legacy base directory: ${BASE_DIR}`);
+  console.log(`Using legacy data directory: ${DATA_DIR}`);
 
   const stores = [
     { file: 'categories.json', table: 'categories' },
@@ -79,7 +99,18 @@ async function syncAll() {
   const metaPath = path.join(DATA_DIR, 'product_files_meta.json');
   if (fs.existsSync(metaPath)) {
     const metaList = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-    await supabase.storage.createBucket('printh3d-files', { public: true });
+    const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'printh3d-files';
+    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+    if (bucketsError) {
+      throw new Error(`Could not list storage buckets: ${bucketsError.message}`);
+    }
+
+    if (!buckets?.some((bucket) => bucket.name === bucketName)) {
+      const { error: bucketError } = await supabase.storage.createBucket(bucketName, { public: true });
+      if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already exists')) {
+        throw new Error(`Could not create bucket ${bucketName}: ${bucketError.message}`);
+      }
+    }
 
     for (const meta of metaList) {
       try {
@@ -89,13 +120,13 @@ async function syncAll() {
           const storagePath = `products/${meta.id}_${meta.nome_arquivo.replace(/\s+/g, '_')}`;
           
           await supabase.storage
-            .from('printh3d-files')
+            .from(bucketName)
             .upload(storagePath, fileContent, {
               contentType: meta.mime_type || 'application/octet-stream',
               upsert: true
             });
 
-          const publicUrl = supabase.storage.from('printh3d-files').getPublicUrl(storagePath).data.publicUrl;
+          const publicUrl = supabase.storage.from(bucketName).getPublicUrl(storagePath).data.publicUrl;
 
           await supabase.from('product_files').upsert({
             id: meta.id,
@@ -108,7 +139,9 @@ async function syncAll() {
             created_at: meta.created_at
           }, { onConflict: 'id' });
         }
-      } catch (fErr) {}
+      } catch (fErr) {
+        console.error(`File migration failed for ${meta?.nome_arquivo || 'unknown'}:`, fErr?.message || fErr);
+      }
     }
     console.log(`✓ Files migrated`);
   }

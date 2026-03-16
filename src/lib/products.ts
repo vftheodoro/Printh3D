@@ -29,7 +29,10 @@ const CATEGORY_STYLES: Record<string, { icon: string, color: string }> = {
 function mapDbProductToFrontend(dbProd: any): Product {
   let defaultImage = "/assets/imagens/design_screen.png";
   if (dbProd.product_files && dbProd.product_files.length > 0) {
-    defaultImage = dbProd.product_files[0].storage_path;
+    const cover = dbProd.cover_file_id
+      ? dbProd.product_files.find((f: any) => Number(f.id) === Number(dbProd.cover_file_id))
+      : null;
+    defaultImage = (cover || dbProd.product_files[0]).storage_path;
   }
 
   const categoryName = dbProd.categories?.nome?.toLowerCase() || 'geral';
@@ -39,7 +42,7 @@ function mapDbProductToFrontend(dbProd: any): Product {
     name: dbProd.nome,
     category: categoryName,
     price: dbProd.preco_venda || 0,
-    promotional_price: dbProd.preco_promocional,
+    promotional_price: dbProd.preco_promocional ? Number(dbProd.preco_promocional) : undefined,
     material: dbProd.material || 'PLA',
     image: defaultImage,
     shortDesc: dbProd.descricao ? (dbProd.descricao.substring(0, 80) + '...') : (dbProd.nome + ' em impressão 3D'),

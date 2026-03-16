@@ -1,8 +1,13 @@
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 
-const secretKey = process.env.ADMIN_JWT_SECRET || 'fallback-secret-key-123-do-not-use-in-production';
-const JWT_SECRET = new TextEncoder().encode(secretKey);
+function getJwtSecret(): Uint8Array {
+  const secretKey = process.env.ADMIN_JWT_SECRET;
+  if (!secretKey) {
+    throw new Error('Missing ADMIN_JWT_SECRET environment variable.');
+  }
+  return new TextEncoder().encode(secretKey);
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 10);
@@ -13,17 +18,19 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export async function createAdminSession(userId: string, email: string) {
+  const jwtSecret = getJwtSecret();
   const token = await new SignJWT({ sub: String(userId), email })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('24h')
-    .sign(JWT_SECRET);
+    .sign(jwtSecret);
   return token;
 }
 
 export async function verifyAdminSession(token: string) {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const jwtSecret = getJwtSecret();
+    const { payload } = await jwtVerify(token, jwtSecret);
     return payload;
   } catch (error) {
     return null;

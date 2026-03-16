@@ -1,13 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Wallet, Plus, Edit2, Trash2, Search, CheckCircle, AlertTriangle, User, Calendar } from 'lucide-react';
 
 interface Sale {
   id: number;
   data_venda: string;
+  cliente_id?: number | null;
   cliente: string;
   item_nome: string;
+  product_id?: number | null;
+  cupom_id?: number | null;
+  desconto_percentual?: number;
   valor_venda: number;
   valor_devido: number;
   tipo_pagamento: string;
@@ -15,25 +19,129 @@ interface Sale {
   observacoes: string;
 }
 
+interface ProductOption {
+  id: number;
+  nome: string;
+  preco_venda: number;
+}
+
+interface CouponOption {
+  id: number;
+  codigo: string;
+  tipo_desconto: 'percentual' | 'fixo';
+  valor_desconto: number;
+  ativo: boolean;
+  data_validade?: string | null;
+}
+
+interface ClientOption {
+  id: number;
+  nome: string;
+  whatsapp?: string;
+  email?: string;
+}
+
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all, paid, pending
+  const [products, setProducts] = useState<ProductOption[]>([]);
+  const [coupons, setCoupons] = useState<CouponOption[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [productQuery, setProductQuery] = useState('');
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   
   const initialForm = {
-    cliente: '', item_nome: '', valor_venda: 0, valor_devido: 0, 
-    tipo_pagamento: 'PIX', parcelas: 1, observacoes: '', data_venda: new Date().toISOString().slice(0, 16)
+    cliente: '', cliente_id: '', item_nome: '', product_id: '', cupom_id: '', desconto_percentual: 0, valor_venda: 0, valor_devido: 0,
+    tipo_pagamento: 'PIX', parcelas: 1, quantidade: 1, preco_unitario: 0, observacoes: '', data_venda: new Date().toISOString().slice(0, 16)
   };
   const [formData, setFormData] = useState<any>(initialForm);
+
+  const normalizeText = (value: string) => value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  const suggestedProducts = useMemo(() => {
+    const query = normalizeText(productQuery);
+    if (!query) return products.slice(0, 8);
+
+    const queryTokens = query.split(/\s+/).filter(Boolean);
+    return [...products]
+      .map((product) => {
+        const name = normalizeText(product.nome);
+        const startsWith = name.startsWith(query) ? 1 : 0;
+        const contains = name.includes(query) ? 1 : 0;
+        const tokenMatches = queryTokens.reduce((acc, token) => (name.includes(token) ? acc + 1 : acc), 0);
+        return { product, score: (startsWith * 5) + (contains * 3) + tokenMatches };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((entry) => entry.product);
+  }, [productQuery, products]);
+
+  const suggestedClients = useMemo(() => {
+    const query = normalizeText(formData.cliente || '');
+    if (!query) return clients.slice(0, 8);
+
+    const queryTokens = query.split(/\s+/).filter(Boolean);
+    return [...clients]
+      .map((client) => {
+        const name = normalizeText(client.nome || '');
+        const startsWith = name.startsWith(query) ? 1 : 0;
+        const contains = name.includes(query) ? 1 : 0;
+        const tokenMatches = queryTokens.reduce((acc, token) => (name.includes(token) ? acc + 1 : acc), 0);
+        return { client, score: (startsWith * 5) + (contains * 3) + tokenMatches };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((entry) => entry.client);
+  }, [clients, formData.cliente]);
 
   useEffect(() => {
     loadSales();
   }, [search, statusFilter]);
+
+  useEffect(() => {
+    loadAuxiliaryData();
+  }, []);
+
+  const loadAuxiliaryData = async () => {
+    try {
+      const [productsRes, couponsRes, clientsRes] = await Promise.all([
+        fetch('/api/admin/products'),
+        fetch('/api/admin/coupons'),
+        fetch('/api/admin/clients')
+      ]);
+
+      const productsData = await productsRes.json();
+      const couponsData = await couponsRes.json();
+      const clientsData = await clientsRes.json();
+
+      if (Array.isArray(productsData)) {
+        setProducts(productsData);
+      }
+
+      if (Array.isArray(couponsData)) {
+        setCoupons(couponsData.filter((c: CouponOption) => c.ativo));
+      }
+
+      if (Array.isArray(clientsData)) {
+        setClients(clientsData);
+      }
+    } catch (error) {
+      console.error('Falha ao carregar produtos/cupons/clientes', error);
+    }
+  };
 
   const loadSales = async () => {
     setLoading(true);
@@ -50,19 +158,129 @@ export default function SalesPage() {
 
   const openModal = async (sale?: Sale) => {
     if (sale) {
+      const quantityMatch = String(sale.item_nome || '').match(/\s+x(\d+)$/i);
+      const parsedQuantity = quantityMatch ? Math.max(1, Number(quantityMatch[1]) || 1) : 1;
+      const unitPrice = parsedQuantity > 0 ? Number((Number(sale.valor_venda || 0) / parsedQuantity).toFixed(2)) : Number(sale.valor_venda || 0);
       setEditingId(sale.id);
       setFormData({
         ...sale,
+        cliente_id: sale.cliente_id || '',
+        product_id: sale.product_id || '',
+        cupom_id: sale.cupom_id || '',
+        quantidade: parsedQuantity,
+        preco_unitario: unitPrice,
         data_venda: new Date(sale.data_venda).toISOString().slice(0, 16)
       });
+      setProductQuery(sale.item_nome || '');
     } else {
       setEditingId(null);
       setFormData(initialForm);
+      setProductQuery('');
     }
     setIsModalOpen(true);
   };
 
-  const closeModal = () => setIsModalOpen(false);
+  const closeModal = () => {
+    setShowClientSuggestions(false);
+    setShowProductSuggestions(false);
+    setIsModalOpen(false);
+  };
+
+  const selectClient = (client: ClientOption) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      cliente: client.nome,
+      cliente_id: client.id
+    }));
+    setShowClientSuggestions(false);
+  };
+
+  const applyCouponPreview = (baseValue: number, couponId: string | number) => {
+    const coupon = coupons.find(c => c.id === Number(couponId));
+    if (!coupon) {
+      return { valor_venda: baseValue, desconto_percentual: 0 };
+    }
+
+    const isExpired = coupon.data_validade ? new Date(coupon.data_validade) < new Date() : false;
+    if (isExpired) {
+      return { valor_venda: baseValue, desconto_percentual: 0 };
+    }
+
+    if (coupon.tipo_desconto === 'percentual') {
+      const finalValue = Math.max(0, baseValue - ((baseValue * coupon.valor_desconto) / 100));
+      return {
+        valor_venda: Number(finalValue.toFixed(2)),
+        desconto_percentual: Number(coupon.valor_desconto) || 0
+      };
+    }
+
+    const fixedDiscount = Number(coupon.valor_desconto) || 0;
+    const finalValue = Math.max(0, baseValue - fixedDiscount);
+    const discountPercent = baseValue > 0 ? Number(((fixedDiscount / baseValue) * 100).toFixed(2)) : 0;
+    return {
+      valor_venda: Number(finalValue.toFixed(2)),
+      desconto_percentual: discountPercent
+    };
+  };
+
+  const handleProductChange = (productId: string) => {
+    const product = products.find(p => p.id === Number(productId));
+    if (!product) {
+      setFormData((prev: any) => ({
+        ...prev,
+        product_id: '',
+        item_nome: '',
+        preco_unitario: 0,
+        quantidade: prev.quantidade || 1,
+        valor_venda: 0,
+        desconto_percentual: 0
+      }));
+      return;
+    }
+
+    const quantity = Math.max(1, Number(formData.quantidade) || 1);
+    const baseValue = (Number(product.preco_venda) || 0) * quantity;
+    const next = applyCouponPreview(baseValue, formData.cupom_id);
+    setFormData((prev: any) => ({
+      ...prev,
+      product_id: product.id,
+      item_nome: product.nome,
+      preco_unitario: Number(product.preco_venda) || 0,
+      valor_venda: next.valor_venda,
+      desconto_percentual: next.desconto_percentual
+    }));
+    setProductQuery(product.nome);
+    setShowProductSuggestions(false);
+  };
+
+  const handleQuantityChange = (value: number) => {
+    const quantity = Math.max(1, Number(value) || 1);
+    const unitPrice = Number(formData.preco_unitario) || Number(formData.valor_venda) || 0;
+    const baseValue = unitPrice * quantity;
+    const next = applyCouponPreview(baseValue, formData.cupom_id);
+
+    setFormData((prev: any) => ({
+      ...prev,
+      quantidade: quantity,
+      valor_venda: next.valor_venda,
+      desconto_percentual: next.desconto_percentual
+    }));
+  };
+
+  const handleCouponChange = (couponId: string) => {
+    const quantity = Math.max(1, Number(formData.quantidade) || 1);
+    const linkedProduct = products.find(p => p.id === Number(formData.product_id));
+    const unitPrice = linkedProduct ? Number(linkedProduct.preco_venda) || 0 : Number(formData.preco_unitario) || Number(formData.valor_venda) || 0;
+    const baseValue = unitPrice * quantity;
+    const next = couponId ? applyCouponPreview(baseValue, couponId) : { valor_venda: baseValue, desconto_percentual: 0 };
+
+    setFormData((prev: any) => ({
+      ...prev,
+      cupom_id: couponId ? Number(couponId) : '',
+      valor_venda: next.valor_venda,
+      desconto_percentual: next.desconto_percentual
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,9 +288,21 @@ export default function SalesPage() {
     const method = editingId ? 'PUT' : 'POST';
 
     try {
-      // Ensure ISO string for Supabase timestamp
+      // Send only fields supported by the sales API/table.
       const payload = {
-        ...formData,
+        cliente_id: formData.cliente_id ? Number(formData.cliente_id) : null,
+        cliente: String(formData.cliente || ''),
+        item_nome: String(formData.item_nome || ''),
+        product_id: formData.product_id ? Number(formData.product_id) : null,
+        cupom_id: formData.cupom_id ? Number(formData.cupom_id) : null,
+        desconto_percentual: Number(formData.desconto_percentual) || 0,
+        valor_venda: Number(formData.valor_venda) || 0,
+        valor_devido: Number(formData.valor_devido) || 0,
+        tipo_pagamento: String(formData.tipo_pagamento || 'PIX'),
+        parcelas: Math.max(1, Number(formData.parcelas) || 1),
+        observacoes: formData.observacoes ? String(formData.observacoes) : null,
+        quantidade: Math.max(1, Number(formData.quantidade) || 1),
+        preco_unitario: Number(formData.preco_unitario) || 0,
         data_venda: new Date(formData.data_venda).toISOString()
       };
 
@@ -113,15 +343,14 @@ export default function SalesPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="card" style={{ padding: '1rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', padding: '0 0.8rem' }}>
-          <Search size={16} style={{ color: 'var(--text-muted)' }} />
+      <div className="page-toolbar">
+        <div className="toolbar-search">
+          <Search size={16} />
           <input 
             type="text" 
             placeholder="Buscar por cliente ou item..." 
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ border: 'none', background: 'transparent', width: '100%', outline: 'none', padding: '0.6rem', color: 'var(--text)' }}
           />
         </div>
         
@@ -171,26 +400,26 @@ export default function SalesPage() {
                   <td>{sale.item_nome}</td>
                   <td><span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{sale.vendedor?.nome || 'Sistema'}</span></td>
                   <td>
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'var(--bg-sidebar)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                    <span className="status-badge badge-neutral">
                       {sale.tipo_pagamento}
                     </span>
                   </td>
                   <td style={{ fontWeight: 600 }}>{formatMoney(sale.valor_venda)}</td>
                   <td>
                     {isPending ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--warning)', fontSize: '0.8rem', background: 'var(--warning-light)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
-                        <AlertTriangle size={14}/> Faltam {formatMoney(sale.valor_devido)}
+                      <span className="status-badge badge-warning">
+                        <AlertTriangle size={12}/> Faltam {formatMoney(sale.valor_devido)}
                       </span>
                     ) : (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--success)', fontSize: '0.8rem' }}>
-                        <CheckCircle size={14}/> Pago
+                      <span className="status-badge badge-success">
+                        <CheckCircle size={12}/> Pago
                       </span>
                     )}
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <div className="action-btns">
                       <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openModal(sale)}><Edit2 size={14} /></button>
-                      <button className="btn btn-danger" style={{ padding: '0.4rem', background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger-light)' }} onClick={() => handleDelete(sale.id)}><Trash2 size={14} /></button>
+                      <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handleDelete(sale.id)}><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -214,17 +443,101 @@ export default function SalesPage() {
                   
                   {/* Left Column: Data */}
                   <div>
-                    <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Detalhes do Pedido</h4>
+                    <h4 className="form-section">Detalhes do Pedido</h4>
                     
                     <div className="form-group">
                       <label>Cliente (Nome completo) *</label>
-                      <input type="text" value={formData.cliente} onChange={e => setFormData({...formData, cliente: e.target.value})} required placeholder="Ex: João Silva" />
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="text"
+                          value={formData.cliente}
+                          onFocus={() => setShowClientSuggestions(true)}
+                          onChange={e => setFormData({ ...formData, cliente: e.target.value, cliente_id: '' })}
+                          required
+                          placeholder="Ex: João Silva"
+                        />
+                        {showClientSuggestions && suggestedClients.length > 0 && (
+                          <div className="catalog-suggestions" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 25 }}>
+                            {suggestedClients.map((client) => (
+                              <button
+                                key={client.id}
+                                type="button"
+                                className="catalog-suggestion-item"
+                                onClick={() => selectClient(client)}
+                              >
+                                <span>{client.nome}</span>
+                                <strong>{client.whatsapp || client.email || `ID ${client.id}`}</strong>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <small style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Será salvo na base de clientes auto.</small>
                     </div>
                     
                     <div className="form-group">
+                      <label>Produto Cadastrado (busca inteligente)</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="text"
+                          placeholder="Digite para pesquisar no catálogo"
+                          value={productQuery}
+                          onFocus={() => setShowProductSuggestions(true)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setProductQuery(value);
+                            setShowProductSuggestions(true);
+
+                            if (!value.trim()) {
+                              setFormData((prev: any) => ({
+                                ...prev,
+                                product_id: '',
+                                item_nome: '',
+                                preco_unitario: 0,
+                                valor_venda: 0,
+                                desconto_percentual: 0
+                              }));
+                            } else {
+                              setFormData((prev: any) => ({ ...prev, item_nome: value, product_id: '' }));
+                            }
+                          }}
+                        />
+                        {showProductSuggestions && suggestedProducts.length > 0 && (
+                          <div className="catalog-suggestions" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 25 }}>
+                            {suggestedProducts.map(product => (
+                              <button
+                                key={product.id}
+                                type="button"
+                                className="catalog-suggestion-item"
+                                onClick={() => handleProductChange(String(product.id))}
+                              >
+                                <span>{product.nome}</span>
+                                <strong>{formatMoney(product.preco_venda)}</strong>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <small style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+                        Escreva parte do nome para receber sugestões. Se não selecionar, será venda avulsa.
+                      </small>
+                    </div>
+
+                    <div className="form-group">
                       <label>Nome do Item / Produto *</label>
                       <input type="text" value={formData.item_nome} onChange={e => setFormData({...formData, item_nome: e.target.value})} required placeholder="O que foi vendido?" />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Quantidade vendida *</label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={formData.quantidade}
+                        onChange={e => handleQuantityChange(parseInt(e.target.value || '1', 10))}
+                        required
+                      />
                     </div>
 
                     <div className="form-group">
@@ -240,11 +553,33 @@ export default function SalesPage() {
 
                   {/* Right Column: Values */}
                   <div>
-                    <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Valores e Pagamento</h4>
+                    <h4 className="form-section">Valores e Pagamento</h4>
                     
                     <div className="form-group">
                       <label>Valor Total da Venda (R$) *</label>
                       <input type="number" step="0.01" value={formData.valor_venda} onChange={e => setFormData({...formData, valor_venda: parseFloat(e.target.value)})} required style={{ fontSize: '1.2rem', fontWeight: 'bold' }} />
+                      {Number(formData.preco_unitario) > 0 && Number(formData.quantidade) > 0 && (
+                        <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                          {Number(formData.quantidade)} x {formatMoney(Number(formData.preco_unitario) || 0)} = {formatMoney((Number(formData.preco_unitario) || 0) * Number(formData.quantidade || 1))}
+                        </small>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label>Cupom Aplicado (opcional)</label>
+                      <select value={formData.cupom_id || ''} onChange={e => handleCouponChange(e.target.value)}>
+                        <option value="">Sem cupom</option>
+                        {coupons.map(coupon => (
+                          <option key={coupon.id} value={coupon.id}>
+                            {coupon.codigo} ({coupon.tipo_desconto === 'percentual' ? `${coupon.valor_desconto}%` : formatMoney(coupon.valor_desconto)})
+                          </option>
+                        ))}
+                      </select>
+                      {Number(formData.desconto_percentual) > 0 && (
+                        <small style={{ color: 'var(--success)', fontSize: '0.75rem' }}>
+                          Desconto aplicado: {Number(formData.desconto_percentual).toFixed(2)}%
+                        </small>
+                      )}
                     </div>
 
                     <div className="form-row">
@@ -276,7 +611,7 @@ export default function SalesPage() {
               </form>
             </div>
             
-            <div className="modal-header" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', background: 'transparent', justifyContent: 'flex-end', gap: '0.8rem' }}>
+            <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
               <button type="submit" form="sale-form" className="btn btn-primary">Salvar Venda</button>
             </div>
