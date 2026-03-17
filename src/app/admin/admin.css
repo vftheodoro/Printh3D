@@ -649,8 +649,11 @@ a:hover {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    overflow: hidden;
+    overflow-x: auto;
+    position: relative;
+    width: 100%;
     box-shadow: var(--shadow-sm);
+    -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -2601,7 +2604,13 @@ input[type="checkbox"] {
     }
 
     table {
-        min-width: 600px;
+        min-width: 100%;
+        table-layout: fixed;
+    }
+
+    tbody td, thead th {
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 }
 

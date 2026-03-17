@@ -462,11 +462,11 @@ export default function ProductsPage() {
           <thead>
             <tr>
               <th className="hide-mobile" style={{ width: '40px' }}>ID</th>
-              <th style={{ width: '60px' }}>Foto</th>
+              <th style={{ width: '50px' }}>Foto</th>
               <th>Produto</th>
               <th className="hide-tablet">Categoria</th>
-              <th className="hide-mobile">Estoque</th>
-              <th>Preço</th>
+              <th className="hide-tablet">Estoque</th>
+              <th style={{ width: '90px' }}>Preço</th>
               <th className="hide-tablet">Promo</th>
               <th className="hide-tablet">Status</th>
               <th style={{ width: '80px', textAlign: 'right' }}>Ações</th>

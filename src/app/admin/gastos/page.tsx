@@ -172,13 +172,13 @@ export default function ExpensesPage() {
         <table>
           <thead>
             <tr>
-              <th className="hide-mobile">Data</th>
+              <th className="hide-mobile" style={{ width: '100px' }}>Data</th>
               <th>Descrição</th>
               <th className="hide-tablet">Categoria</th>
               <th className="hide-tablet">Fornecedor</th>
               <th className="hide-tablet">Pagamento</th>
-              <th>Valor Total</th>
-              <th style={{ textAlign: 'right' }}>Ações</th>
+              <th style={{ width: '100px' }}>Total</th>
+              <th style={{ textAlign: 'right', width: '80px' }}>Ações</th>
             </tr>
           </thead>
           <tbody>

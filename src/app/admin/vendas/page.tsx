@@ -366,13 +366,13 @@ export default function SalesPage() {
           <thead>
             <tr>
               <th className="hide-mobile">ID</th>
-              <th>Data / Cliente</th>
-              <th>Item / Pedido</th>
+              <th>Cliente / Data</th>
+              <th className="hide-mobile">Pedido</th>
               <th className="hide-tablet">Vendedor</th>
               <th className="hide-tablet">Pagamento</th>
-              <th>Valor Total</th>
-              <th className="hide-mobile">Status</th>
-              <th style={{ textAlign: 'right' }}>Ações</th>
+              <th style={{ width: '100px' }}>Valor</th>
+              <th className="hide-tablet">Status</th>
+              <th style={{ textAlign: 'right', width: '80px' }}>Ações</th>
             </tr>
           </thead>
           <tbody>
