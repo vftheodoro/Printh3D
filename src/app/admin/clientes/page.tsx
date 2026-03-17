@@ -130,7 +130,7 @@ export default function ClientsPage() {
         ) : clients.length === 0 ? (
            <div className="p-4 text-[var(--text-muted)] w-full block">Nenhum cliente encontrado.</div>
         ) : clients.map((client, index) => (
-          <div key={client.id} className="card" style={{ position: 'relative', marginBottom: 0, padding: '1.25rem' }}>
+          <div key={client.id} className="card" style={{ position: 'relative', marginBottom: 0, padding: '1rem' }}>
             
             {/* VIP Ranking Badge */}
             {index < 3 && !search && (

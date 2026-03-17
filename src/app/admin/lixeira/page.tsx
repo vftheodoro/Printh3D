@@ -87,11 +87,11 @@ export default function TrashPage() {
         <table>
           <thead>
             <tr>
-              <th>ID</th>
+              <th className="hide-tablet">ID</th>
               <th>Nome / Referência</th>
               <th>Origem</th>
-              <th>Data de Exclusão</th>
-              <th>Expira em</th>
+              <th className="hide-mobile">Data de Exclusão</th>
+              <th className="hide-tablet">Expira em</th>
               <th style={{ textAlign: 'right' }}>Ações</th>
             </tr>
           </thead>
@@ -107,26 +107,31 @@ export default function TrashPage() {
               
               return (
                 <tr key={item.id}>
-                  <td style={{ color: 'var(--text-muted)' }}>#{item.id}</td>
-                  <td><strong>{item.item_name}</strong></td>
+                  <td className="hide-tablet" style={{ color: 'var(--text-muted)' }}>#{item.id}</td>
+                  <td>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <strong>{item.item_name}</strong>
+                        <span className="show-mobile-inline" style={{ display: 'none', fontSize: '10px', color: 'var(--text-muted)' }}>{storeLabels[item.source_store] || item.source_store}</span>
+                    </div>
+                  </td>
                   <td>
                     <span className="status-badge badge-neutral">
                       {storeLabels[item.source_store] || item.source_store}
                     </span>
                   </td>
-                  <td>{delDate.toLocaleDateString('pt-BR')} às {delDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
-                  <td>
+                  <td className="hide-mobile">{delDate.toLocaleDateString('pt-BR')} às {delDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
+                  <td className="hide-tablet">
                     <span className={`status-badge ${daysLeft <= 3 ? 'badge-danger' : 'badge-warning'}`}>
                       <AlertCircle size={12} /> {daysLeft} dia(s)
                     </span>
                   </td>
                   <td style={{ textAlign: 'right' }}>
                       <div className="action-btns">
-                      <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleRestore(item.id, item.item_name)}>
-                        <RefreshCcw size={14} /> Restaurar
+                      <button className="btn btn-primary" style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }} onClick={() => handleRestore(item.id, item.item_name)}>
+                        <RefreshCcw size={13} /> <span className="hide-mobile">Restaurar</span>
                       </button>
-                      <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => handlePermanentDelete(item.id, item.item_name)} title="Excluir Definitivamente">
-                        <Trash2 size={14} />
+                      <button className="btn btn-secondary" style={{ padding: '0.35rem' }} onClick={() => handlePermanentDelete(item.id, item.item_name)} title="Excluir Definitivamente">
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </td>

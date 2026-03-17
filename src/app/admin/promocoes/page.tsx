@@ -228,22 +228,27 @@ export default function PromotionsPage() {
               <thead>
                 <tr>
                   <th>Produto</th>
-                  <th>Desconto</th>
-                  <th>Preço Promocional</th>
-                  <th>Preço Original</th>
-                  <th>Período</th>
-                  <th>Status</th>
+                  <th className="hide-mobile">Desconto</th>
+                  <th>Preço Promo</th>
+                  <th className="hide-tablet">Original</th>
+                  <th className="hide-tablet">Período</th>
+                  <th className="hide-tablet">Status</th>
                   <th style={{ textAlign: 'right' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? <tr><td colSpan={7}>Carregando...</td></tr> : promotions.map(p => (
                   <tr key={p.id}>
-                    <td><strong>{p.product?.nome || 'Produto removido'}</strong></td>
-                    <td>{p.tipo_desconto === 'percentual' ? `${p.valor_desconto}% OFF` : `R$ ${p.valor_desconto} OFF`}</td>
-                    <td style={{ fontWeight: 'bold', color: 'var(--success)' }}>{formatMoney(p.preco_promocional)}</td>
-                    <td style={{ textDecoration: 'line-through', color: 'var(--text-muted)' }}>{formatMoney(p.product?.preco_venda || 0)}</td>
                     <td>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <strong>{p.product?.nome || 'Produto removido'}</strong>
+                            <span className="show-mobile-inline" style={{ display: 'none', fontSize: '10px', color: 'var(--text-muted)' }}>{p.tipo_desconto === 'percentual' ? `${p.valor_desconto}% OFF` : `R$ ${p.valor_desconto} OFF`}</span>
+                        </div>
+                    </td>
+                    <td className="hide-mobile">{p.tipo_desconto === 'percentual' ? `${p.valor_desconto}% OFF` : `R$ ${p.valor_desconto} OFF`}</td>
+                    <td style={{ fontWeight: 'bold', color: 'var(--success)' }}>{formatMoney(p.preco_promocional)}</td>
+                    <td className="hide-tablet" style={{ textDecoration: 'line-through', color: 'var(--text-muted)' }}>{formatMoney(p.product?.preco_venda || 0)}</td>
+                    <td className="hide-tablet">
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                         <Calendar size={12} style={{ display: 'inline', marginRight: '4px' }}/>
                         {p.data_inicio ? new Date(p.data_inicio).toLocaleDateString() : 'Início img.'} 
@@ -251,13 +256,13 @@ export default function PromotionsPage() {
                         {p.data_fim ? new Date(p.data_fim).toLocaleDateString() : 'S/ limite'}
                       </span>
                     </td>
-                    <td>
+                    <td className="hide-tablet">
                       {p.ativo ? <span style={{ color: 'var(--success)', fontSize: '0.8rem' }}>Ativa</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Inativa</span>}
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <div className="action-btns">
-                        <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openPromoModal(p)}><Edit2 size={14} /></button>
-                        <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handlePromoDelete(p.id)}><Trash2 size={14} /></button>
+                        <button className="btn btn-secondary" style={{ padding: '0.35rem' }} onClick={() => openPromoModal(p)}><Edit2 size={13} /></button>
+                        <button className="btn btn-danger-ghost" style={{ padding: '0.35rem' }} onClick={() => handlePromoDelete(p.id)}><Trash2 size={13} /></button>
                       </div>
                     </td>
                   </tr>

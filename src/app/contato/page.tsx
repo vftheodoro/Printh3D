@@ -91,7 +91,7 @@ export default function ContactPage() {
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mb-8 border border-blue-500/20">
                   <ShieldCheck className="w-3 h-3" /> Contato Direto
                 </div>
-                <h1 className="text-5xl md:text-8xl font-black mb-8 tracking-tighter leading-[0.9]">
+                <h1 className="text-4xl md:text-8xl font-black mb-6 md:mb-8 tracking-tighter leading-[0.9]">
                   Vamos criar <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">algo novo.</span>
                 </h1>
                 <p className="text-lg text-slate-400 font-medium max-w-lg leading-relaxed mb-10">

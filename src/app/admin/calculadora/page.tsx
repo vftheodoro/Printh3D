@@ -109,7 +109,7 @@ export default function CalculatorPage() {
   return (
     <div className="section active">
       <div className="section-header">
-        <h1><CalcIcon /> Calculadora de Custos 3D</h1>
+        <h1 style={{ fontSize: '1.25rem' }}><CalcIcon /> Calculadora de Custos 3D</h1>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
