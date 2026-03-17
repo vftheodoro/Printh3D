@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase';
+import { sanitizeProductPayload } from '@/lib/product-payload';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -23,21 +24,31 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const json = await request.json();
+    const payload = sanitizeProductPayload(json, 'update');
     const supabase = getAdminSupabase();
     
     const { data, error } = await supabase
       .from('products')
       .update({
-        ...json,
+        ...payload,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('PUT /api/admin/products/[id] failed:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw error;
+    }
     return NextResponse.json(data);
   } catch (error: any) {
+    console.error('PUT /api/admin/products/[id] exception:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

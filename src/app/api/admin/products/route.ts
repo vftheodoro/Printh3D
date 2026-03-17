@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase';
+import { sanitizeProductPayload } from '@/lib/product-payload';
 
 export async function GET(request: Request) {
   try {
@@ -34,37 +35,71 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const json = await request.json();
+    const payload = sanitizeProductPayload(json, 'create');
+    const { id: _ignoredId, created_at: _ignoredCreatedAt, updated_at: _ignoredUpdatedAt, ...insertPayload } = payload;
     const supabase = getAdminSupabase();
 
     // Check SKU uniqueness
-    if (json.codigo_sku) {
-      const { data: existingSku } = await supabase.from('products').select('id').eq('codigo_sku', json.codigo_sku).single();
+    if (insertPayload.codigo_sku) {
+      const { data: existingSku } = await supabase.from('products').select('id').eq('codigo_sku', insertPayload.codigo_sku).single();
       if (existingSku) return NextResponse.json({ error: 'SKU já existe.' }, { status: 400 });
     }
 
-    const { data: category } = await supabase.from('categories').select('prefixo').eq('id', json.category_id).single();
+    const { data: category } = await supabase.from('categories').select('prefixo').eq('id', insertPayload.category_id).single();
     
     // Auto-generate SKU if omitted
-    let finalSku = json.codigo_sku;
+    let finalSku = insertPayload.codigo_sku;
     if (!finalSku && category) {
-      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('category_id', json.category_id);
+      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('category_id', insertPayload.category_id);
       const nextNum = (count || 0) + 1;
       finalSku = `${category.prefixo}-${nextNum.toString().padStart(4, '0')}`;
     } else if (!finalSku) {
       finalSku = `PRD-${Date.now().toString().slice(-6)}`;
     }
 
-    const { data, error } = await supabase.from('products').insert([{
-      ...json,
+    const baseInsertPayload = {
+      ...insertPayload,
       codigo_sku: finalSku,
-      dimensoes: json.dimensoes || {x:0, y:0, z:0},
-      custo_detalhado: json.custo_detalhado || {},
-      custos_adicionais: json.custos_adicionais || {}
-    }]).select().single();
+      dimensoes: insertPayload.dimensoes || {x:0, y:0, z:0},
+      custo_detalhado: insertPayload.custo_detalhado || {},
+      custos_adicionais: insertPayload.custos_adicionais || {}
+    };
 
-    if (error) throw error;
+    let { data, error } = await supabase
+      .from('products')
+      .insert([baseInsertPayload])
+      .select()
+      .single();
+
+    const isPrimaryKeyCollision = error?.code === '23505' && (error?.message || '').includes('products_pkey');
+    if (isPrimaryKeyCollision) {
+      const { data: lastRow } = await supabase
+        .from('products')
+        .select('id')
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const fallbackId = Number(lastRow?.id || 0) + 1;
+      ({ data, error } = await supabase
+        .from('products')
+        .insert([{ ...baseInsertPayload, id: fallbackId }])
+        .select()
+        .single());
+    }
+
+    if (error) {
+      console.error('POST /api/admin/products failed:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw error;
+    }
     return NextResponse.json(data);
   } catch (error: any) {
+    console.error('POST /api/admin/products exception:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

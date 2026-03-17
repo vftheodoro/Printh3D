@@ -100,7 +100,7 @@ export default function ProductsPage() {
     ativo: true,
     material: 'PLA',
     cor: '',
-    resolucao_camada: '',
+    resolucao_camada: 0.2,
     tags: ''
   };
   const [formData, setFormData] = useState<any>(initialForm);
@@ -350,6 +350,7 @@ export default function ProductsPage() {
       payload.custo_total = calc.custoTotal;
       payload.tempo_min = getEffectiveTempoMin();
       payload.tempo_h = Number((payload.tempo_min / 60).toFixed(2));
+      payload.resolucao_camada = Number(payload.resolucao_camada) || 0.2;
 
       payload.is_variation = !!payload.is_variation;
       payload.parent_product_id = payload.is_variation ? Number(payload.parent_product_id) || null : null;

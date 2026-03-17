@@ -21,19 +21,18 @@ function getEntityColumn(entity: SupportedEntity): string {
   return entity === 'sale' ? 'sale_id' : 'product_id';
 }
 
-function inferFileType(fileName: string, mimeType: string): 'image' | 'model' | 'document' | 'other' {
+function inferFileType(fileName: string, mimeType: string): 'image' | 'document' | 'other' {
   const lowerName = fileName.toLowerCase();
   const lowerMime = (mimeType || '').toLowerCase();
 
   if (lowerMime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(lowerName)) {
     return 'image';
   }
-  if (/\.(stl|obj|3mf|step|stp|rar|zip)$/.test(lowerName)) {
-    return 'model';
-  }
   if (lowerMime.includes('pdf') || /\.(pdf|doc|docx|txt|xls|xlsx)$/.test(lowerName)) {
     return 'document';
   }
+  // Arquivos de modelo 3D, compactados e outros tipos vão como 'other'
+  // (ex: .stl, .obj, .3mf, .step, .stp, .rar, .zip)
   return 'other';
 }
 
@@ -134,15 +133,47 @@ export async function POST(request: Request) {
     };
     payload[entityColumn] = entityId;
 
-    const { data, error } = await supabase
+    let insertResult = await supabase
       .from(table)
       .insert([payload])
       .select('*')
       .single();
 
+    let { data, error } = insertResult;
+
     if (error) {
+      const isPrimaryKeyCollision = error?.code === '23505' && (error?.message || '').includes(`${table}_pkey`);
+      if (isPrimaryKeyCollision) {
+        const { data: lastRow } = await supabase
+          .from(table)
+          .select('id')
+          .order('id', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const fallbackId = Number(lastRow?.id || 0) + 1;
+        const retryResult = await supabase
+          .from(table)
+          .insert([{ ...payload, id: fallbackId }])
+          .select('*')
+          .single();
+
+        if (retryResult.error) {
+          await supabase.storage.from(bucket).remove([storagePath]);
+          throw retryResult.error;
+        }
+
+        data = retryResult.data;
+        error = null;
+      } else {
+        await supabase.storage.from(bucket).remove([storagePath]);
+        throw error;
+      }
+    }
+
+    if (!data || error) {
       await supabase.storage.from(bucket).remove([storagePath]);
-      throw error;
+      throw new Error('Falha ao registrar arquivo no banco de dados.');
     }
 
     return NextResponse.json(data, { status: 201 });
