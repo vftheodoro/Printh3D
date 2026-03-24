@@ -85,7 +85,7 @@ export function sanitizeProductPayload(input: ProductPayload, mode: 'create' | '
   }
 
   if (isCreate || hasOwn(payload, 'dimensoes')) {
-    const dims = payload.dimensoes || {};
+    const dims: any = payload.dimensoes || {};
     payload.dimensoes = {
       largura: toNumberOr(dims.largura, 0),
       altura: toNumberOr(dims.altura, 0),
@@ -94,7 +94,7 @@ export function sanitizeProductPayload(input: ProductPayload, mode: 'create' | '
   }
 
   if (isCreate || hasOwn(payload, 'custos_adicionais')) {
-    const extra = payload.custos_adicionais || {};
+    const extra: any = payload.custos_adicionais || {};
     payload.custos_adicionais = {
       material_extra: toNumberOr(extra.material_extra, 0),
     };
