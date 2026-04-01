@@ -158,8 +158,7 @@ export default function AdminSidebar({
             />
           </div>
           <div className="brand-text">
-            <h2>Printh<span>3D</span></h2>
-            <small>Pro Edition</small>
+            <h2>Printh</h2>
           </div>
         </div>
 

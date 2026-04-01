@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,12 +45,14 @@ export default function LoginPage() {
   return (
     <div className="login-wrapper">
       <div className={`login-card ${shake ? 'shake' : ''}`}>
-        <div className="login-logo">
-          <div className="logo-icon-wrap">
-            <Box size={28} strokeWidth={2} />
-          </div>
-          <h1>Printh3D <span>PRO</span></h1>
-          <p>Sistema de Gestão Integrado</p>
+        <div className="login-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem' }}>
+          <img 
+            src="/assets/logos/logo_printh_azul.png" 
+            alt="Printh Logo" 
+            style={{ width: '80px', height: 'auto', marginBottom: '1rem', filter: 'drop-shadow(0 4px 12px rgba(0, 188, 255, 0.4))' }} 
+          />
+          <h1 style={{ fontSize: '1.8rem', margin: 0, fontWeight: 700 }}>Printh</h1>
+          <p style={{ color: '#8892b0', marginTop: '0.4rem', fontSize: '0.9rem' }}>Sistema de Gestão Integrado</p>
         </div>
 
         {error && <div className="login-error" style={{ display: 'block' }}>{error}</div>}
@@ -89,7 +91,7 @@ export default function LoginPage() {
 
         <div className="login-info">
           <p>
-            Acesso restrito para administradores e equipe <strong>Printh3D</strong>.<br />
+            Acesso restrito para administradores e equipe <strong>Printh</strong>.<br />
             Certifique-se de estar em uma rede segura.
           </p>
         </div>
