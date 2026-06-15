@@ -1,71 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Package, Plus, Edit2, Trash2, Search, Filter, Image as ImageIcon, CheckCircle, XCircle, Upload, Star, Save } from 'lucide-react';
-
-interface Category {
-  id: number;
-  nome: string;
-  cor: string;
-}
-
-interface Product {
-  id: number;
-  codigo_sku: string;
-  nome: string;
-  category_id?: number | null;
-  descricao?: string;
-  peso_g?: number;
-  tempo_h?: number;
-  tempo_min?: number;
-  material?: string;
-  cor?: string;
-  resolucao_camada?: number | string;
-  dimensoes?: { largura?: number; altura?: number; profundidade?: number };
-  custo_total?: number;
-  margem?: number;
-  custos_adicionais?: { material_extra?: number };
-  custo_detalhado?: any;
-  descricoes_social?: { geral?: string; instagram?: string; facebook?: string; whatsapp?: string; tiktok?: string };
-  tags?: string[] | string;
-  is_variation?: boolean;
-  parent_product_id?: number | null;
-  variation_label?: string;
-  calculation_mode?: 'basic' | 'detailed';
-  estoque_minimo?: number;
-  preco_promocional?: number;
-  preco_venda: number;
-  quantidade_estoque: number;
-  ativo: boolean;
-  cover_file_id?: number | null;
-  product_files?: ProductFile[];
-  category?: Category;
-}
-
-interface ProductFile {
-  id: number;
-  nome_arquivo: string;
-  tipo: string;
-  mime_type: string;
-  tamanho_bytes: number;
-  storage_path: string;
-}
-
-interface SettingsData {
-  margem_padrao: number;
-  custo_kg: number;
-  custo_hora_maquina: number;
-  custo_kwh: number;
-  consumo_maquina_w: number;
-  percentual_falha: number;
-  depreciacao_percentual: number;
-}
+import {
+  getApiErrorMessage,
+  getUnknownErrorMessage,
+} from '@/lib/client-api';
+import type {
+  AdminCategory,
+  AdminProduct,
+  AdminProductFile,
+  ProductFormData,
+  ProductSettings,
+} from '@/modules/products/admin/types';
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [settings, setSettings] = useState<SettingsData | null>(null);
+  const [products, setProducts] = useState<AdminProduct[]>([]);
+  const [allProducts, setAllProducts] = useState<AdminProduct[]>([]);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
+  const [settings, setSettings] = useState<ProductSettings | null>(null);
   const [loading, setLoading] = useState(true);
   
   const [search, setSearch] = useState('');
@@ -77,10 +30,10 @@ export default function ProductsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState('basic');
-  const [productFiles, setProductFiles] = useState<ProductFile[]>([]);
+  const [productFiles, setProductFiles] = useState<AdminProductFile[]>([]);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  const initialForm = {
+  const initialForm: ProductFormData = {
     nome: '', category_id: '', codigo_sku: '', descricao: '',
     is_variation: false,
     parent_product_id: '',
@@ -105,13 +58,9 @@ export default function ProductsPage() {
     resolucao_camada: 0.2,
     tags: ''
   };
-  const [formData, setFormData] = useState<any>(initialForm);
+  const [formData, setFormData] = useState<ProductFormData>(initialForm);
 
-  useEffect(() => {
-    loadData();
-  }, [search, categoryFilter]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [prodRes, catRes, allProdRes, settingsRes] = await Promise.all([
@@ -139,9 +88,13 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [categoryFilter, search]);
 
-  const openModal = async (prod?: Product) => {
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const openModal = async (prod?: AdminProduct) => {
     setActiveTab('basic');
     if (prod) {
       setEditingId(prod.id);
@@ -193,7 +146,7 @@ export default function ProductsPage() {
     if (!parent) return;
 
     if (parent.category_id && Number(formData.category_id) !== Number(parent.category_id)) {
-      setFormData((prev: any) => ({ ...prev, category_id: parent.category_id }));
+      setFormData((prev) => ({ ...prev, category_id: parent.category_id || null }));
     }
   }, [formData.is_variation, formData.parent_product_id, allProducts, formData.category_id]);
 
@@ -284,14 +237,16 @@ export default function ProductsPage() {
         });
 
         const result = await res.json();
-        if (!res.ok) throw new Error(result.error || 'Erro ao enviar arquivo.');
+        if (!res.ok) {
+          throw new Error(getApiErrorMessage(result, 'Erro ao enviar arquivo.'));
+        }
       }
 
       await loadProductFiles(editingId);
       await loadData();
       event.target.value = '';
-    } catch (error: any) {
-      alert(error.message || 'Falha ao enviar arquivo.');
+    } catch (error: unknown) {
+      alert(getUnknownErrorMessage(error, 'Falha ao enviar arquivo.'));
     } finally {
       setUploadingFile(false);
     }
@@ -306,14 +261,16 @@ export default function ProductsPage() {
       });
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Erro ao remover arquivo.');
+      if (!res.ok) {
+        throw new Error(getApiErrorMessage(result, 'Erro ao remover arquivo.'));
+      }
 
       if (editingId) {
         await loadProductFiles(editingId);
         await loadData();
       }
-    } catch (error: any) {
-      alert(error.message || 'Falha ao remover arquivo.');
+    } catch (error: unknown) {
+      alert(getUnknownErrorMessage(error, 'Falha ao remover arquivo.'));
     }
   };
 
@@ -327,12 +284,14 @@ export default function ProductsPage() {
         body: JSON.stringify({ cover_file_id: fileId }),
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Erro ao definir capa.');
+      if (!res.ok) {
+        throw new Error(getApiErrorMessage(result, 'Erro ao definir capa.'));
+      }
 
       setFormData({ ...formData, cover_file_id: fileId });
       await loadData();
-    } catch (error: any) {
-      alert(error.message || 'Falha ao definir capa.');
+    } catch (error: unknown) {
+      alert(getUnknownErrorMessage(error, 'Falha ao definir capa.'));
     }
   };
 
@@ -406,12 +365,16 @@ export default function ProductsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error((await res.json()).error);
+      if (!res.ok) {
+        throw new Error(
+          getApiErrorMessage(await res.json(), 'Erro ao salvar produto.'),
+        );
+      }
       
       closeModal();
       loadData();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (error: unknown) {
+      alert(getUnknownErrorMessage(error, 'Erro ao salvar produto.'));
     } finally {
       setIsSaving(false);
     }
@@ -422,10 +385,14 @@ export default function ProductsPage() {
     setIsDeletingId(id);
     try {
       const res = await fetch(`/api/admin/products/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error((await res.json()).error);
+      if (!res.ok) {
+        throw new Error(
+          getApiErrorMessage(await res.json(), 'Erro ao excluir produto.'),
+        );
+      }
       loadData();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (error: unknown) {
+      alert(getUnknownErrorMessage(error, 'Erro ao excluir produto.'));
     } finally {
       setIsDeletingId(null);
     }
@@ -489,7 +456,7 @@ export default function ProductsPage() {
             ) : products.map(prod => (
               <tr key={prod.id} style={{ opacity: prod.ativo ? 1 : 0.5 }}>
                 <td className="hide-mobile" style={{ color: 'var(--text-muted)' }}>#{prod.id}</td>
-                <td>
+                <td data-label="Foto">
                   {/* ... (image logic) ... */}
                   {(() => {
                     const ownFiles = prod.product_files ?? [];
@@ -511,36 +478,36 @@ export default function ProductsPage() {
                     );
                   })()}
                 </td>
-                <td>
+                <td data-label="Produto">
                   <strong style={{ display: 'block', fontSize: '0.85rem' }}>
                     {prod.nome}
                     {prod.is_variation && <span className="variation-badge">VAR</span>}
                   </strong>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{prod.codigo_sku}</span>
                 </td>
-                <td className="hide-tablet">
+                <td className="hide-tablet" data-label="Categoria">
                   {prod.category ? (
                     <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'var(--bg-sidebar)', borderRadius: '4px', borderLeft: `2px solid ${prod.category.cor}` }}>
                       {prod.category.nome}
                     </span>
                   ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                 </td>
-                <td className="hide-mobile">
+                <td className="hide-mobile" data-label="Estoque">
                   <span style={{ fontWeight: 600, color: prod.quantidade_estoque <= 0 ? 'var(--danger)' : 'var(--text)' }}>
                     {prod.quantidade_estoque}
                   </span>
                 </td>
-                <td style={{ fontWeight: 600, fontSize: '0.85rem' }}>{formatMoney(prod.preco_venda)}</td>
-                <td className="hide-tablet" style={{ fontWeight: 600, color: (prod as any).preco_promocional ? 'var(--success)' : 'var(--text-muted)' }}>
-                  {(prod as any).preco_promocional ? formatMoney(Number((prod as any).preco_promocional)) : '—'}
+                <td data-label="Preço" style={{ fontWeight: 600, fontSize: '0.85rem' }}>{formatMoney(prod.preco_venda)}</td>
+                <td className="hide-tablet" data-label="Promoção" style={{ fontWeight: 600, color: prod.preco_promocional ? 'var(--success)' : 'var(--text-muted)' }}>
+                  {prod.preco_promocional ? formatMoney(Number(prod.preco_promocional)) : '—'}
                 </td>
-                <td className="hide-tablet">
+                <td className="hide-tablet" data-label="Status">
                   {prod.ativo ? 
                     <span className="status-badge badge-success"><CheckCircle size={12}/> Ativo</span> : 
                     <span className="status-badge badge-danger"><XCircle size={12}/> Inativo</span>
                   }
                 </td>
-                <td style={{ textAlign: 'right' }}>
+                <td data-label="Ações" style={{ textAlign: 'right' }}>
                   <div className="action-btns">
                     <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openModal(prod)} disabled={isDeletingId === prod.id}><Edit2 size={14} /></button>
                     <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handleDelete(prod.id)} disabled={isDeletingId === prod.id}>
@@ -581,7 +548,7 @@ export default function ProductsPage() {
                     <div className="form-row">
                       <div className="form-group">
                         <label>Categoria</label>
-                        <select value={formData.category_id} onChange={e => setFormData({...formData, category_id: e.target.value})} required>
+                        <select value={formData.category_id ?? ''} onChange={e => setFormData({...formData, category_id: e.target.value})} required>
                           <option value="">Selecione...</option>
                           {categories.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                         </select>

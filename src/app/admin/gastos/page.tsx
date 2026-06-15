@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Receipt, Plus, Edit2, Trash2, Filter, Save } from 'lucide-react';
 
 interface Expense {
@@ -37,11 +37,7 @@ export default function ExpensesPage() {
   };
   const [formData, setFormData] = useState<any>(initialForm);
 
-  useEffect(() => {
-    loadExpenses();
-  }, [categoryFilter, monthFilter]);
-
-  const loadExpenses = async () => {
+  const loadExpenses = useCallback(async () => {
     setLoading(true);
     try {
       const qs = new URLSearchParams();
@@ -56,7 +52,11 @@ export default function ExpensesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [categoryFilter, monthFilter]);
+
+  useEffect(() => {
+    void loadExpenses();
+  }, [loadExpenses]);
 
   const openModal = async (exp?: Expense) => {
     if (exp) {
@@ -71,7 +71,7 @@ export default function ExpensesPage() {
             data_gasto: fullExp.data_gasto ? fullExp.data_gasto.split('T')[0] : ''
            });
         }
-      } catch (e) {
+      } catch {
         setFormData(exp);
       }
     } else {

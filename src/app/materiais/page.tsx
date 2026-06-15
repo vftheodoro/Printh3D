@@ -1,246 +1,208 @@
-"use client";
-
-import Navbar from "@/components/layout/Navbar";
-import FAQ from "@/components/home/FAQ";
-import Footer from "@/components/layout/Footer";
-import { motion } from "framer-motion";
+import type { Metadata } from "next";
 import Image from "next/image";
-import { 
-  Zap, 
-  Settings, 
-  Layers, 
-  Truck, 
-  Car, 
-  Smartphone, 
-  Home, 
-  Wrench,
-  ChevronRight,
-  ShieldCheck
+import Link from "next/link";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Droplets,
+  Gauge,
+  Layers3,
+  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+
+export const metadata: Metadata = {
+  title: "Materiais para Impressão 3D",
+  description:
+    "Conheça PLA, PETG, ABS e TPU e entenda qual material combina melhor com a função, acabamento e resistência do seu projeto.",
+  alternates: {
+    canonical: "/materiais",
+  },
+};
 
 const materials = [
   {
-    id: "pla",
     name: "PLA",
-    fullName: "Ácido Polilático",
-    origin: "Derivado de milho ou cana-de-açúcar (Biodegradável)",
-    strength: "Média Resistência",
-    heatResistance: "Baixa (até 55°C)",
-    applications: "Action figures, protótipos visuais e decorativos.",
-    dailyLife: "Embalagens biodegradáveis e fios de sutura.",
-    color: "text-green-400",
-    bg: "bg-green-500/10",
-    border: "border-green-500/20",
-    glow: "shadow-green-500/5",
-    image: "/assets/imagens/printing_detail.png"
+    summary:
+      "Excelente definição visual e ampla variedade de cores para peças decorativas, brindes, miniaturas e protótipos.",
+    bestFor: "Estética e precisão",
+    properties: ["Ótimo acabamento", "Boa rigidez", "Uso interno"],
+    icon: Sparkles,
+    accent: "text-sky-300",
   },
   {
-    id: "abs",
-    name: "ABS",
-    fullName: "Plástico Industrial (ABS)",
-    origin: "Derivado de petróleo de alta performance",
-    strength: "Alta Durabilidade",
-    heatResistance: "Alta (até 100°C)",
-    applications: "Peças automotivas, carcaças e gabaritos técnicos.",
-    dailyLife: "Peças de LEGO e painéis de carros.",
-    color: "text-orange-400",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/20",
-    glow: "shadow-orange-500/5",
-    image: "/assets/imagens/abs_industrial.png"
-  },
-  {
-    id: "petg",
     name: "PETG",
-    fullName: "PETG de Alta Engenharia",
-    origin: "Evolução do material das garrafas PET",
-    strength: "Resistência Química e Mecânica",
-    heatResistance: "Moderada (até 80°C)",
-    applications: "Suportes industriais e peças de uso externo.",
-    dailyLife: "Garrafas e recipientes de alta resistência.",
-    color: "text-blue-400",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/20",
-    glow: "shadow-blue-500/5",
-    image: "/assets/imagens/finished_showcase.png"
+    summary:
+      "Equilibra resistência mecânica, durabilidade e tolerância à umidade em peças de uso cotidiano.",
+    bestFor: "Uso funcional",
+    properties: ["Resistente à umidade", "Boa durabilidade", "Leve flexibilidade"],
+    icon: Droplets,
+    accent: "text-teal-300",
   },
   {
-    id: "tpu",
+    name: "ABS",
+    summary:
+      "Indicado para aplicações técnicas que exigem resistência ao impacto e melhor tolerância térmica.",
+    bestFor: "Aplicações técnicas",
+    properties: ["Resistência térmica", "Boa tenacidade", "Acabamento tratável"],
+    icon: ShieldCheck,
+    accent: "text-blue-300",
+  },
+  {
     name: "TPU",
-    fullName: "Poliuretano Flexível",
-    origin: "Derivado de elastômeros especiais",
-    strength: "Extrema Resistência ao Impacto",
-    heatResistance: "Resiliente e Térmico",
-    applications: "Capas, vedações e componentes flexíveis.",
-    dailyLife: "Pulseiras de relógio e solas de calçados.",
-    color: "text-purple-400",
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/20",
-    glow: "shadow-purple-500/5",
-    image: "/assets/imagens/printer_farm.png"
-  }
+    summary:
+      "Material flexível para proteções, amortecimento, encaixes e componentes que precisam deformar sem quebrar.",
+    bestFor: "Flexibilidade",
+    properties: ["Absorção de impacto", "Alta elasticidade", "Boa aderência"],
+    icon: Gauge,
+    accent: "text-cyan-300",
+  },
 ];
 
 export default function MaterialsPage() {
   return (
-    <main className="min-h-screen flex flex-col bg-slate-950 text-white selection:bg-blue-500/30">
+    <main id="conteudo-principal" className="min-h-screen bg-[#030712]">
       <Navbar />
 
-      {/* Hero Section */}
-      <section className="pt-40 pb-20 px-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full -z-10 opacity-30">
-          <Image 
-            src="/assets/imagens/materials_hero.png" 
-            alt="Materials Background" 
-            fill 
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-slate-950/90 to-slate-950" />
-        </div>
-
-        <div className="max-w-7xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-600/10 text-blue-500 text-[10px] font-black uppercase tracking-[0.3em] mb-10 border border-blue-500/20">
-              <ShieldCheck className="w-3 h-3" /> Materiais de Elite
-            </div>
-            <h1 className="text-6xl md:text-8xl font-black mb-8 tracking-tighter leading-[0.9]">
-              Tecnologia <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Transformada.</span>
+      <section className="px-4 pb-16 pt-32 sm:px-6 sm:pt-40 lg:pb-24">
+        <div className="container-custom grid items-center gap-12 lg:grid-cols-[1fr_0.9fr]">
+          <div className="max-w-3xl">
+            <span className="eyebrow">Escolha orientada</span>
+            <h1 className="balanced-title mt-5 break-words text-5xl font-black tracking-[-0.055em] text-white sm:text-6xl lg:text-7xl">
+              O material certo muda o resultado da peça.
             </h1>
-            <p className="text-xl text-slate-400 max-w-2xl mx-auto font-medium leading-relaxed">
-              Explore a ciência por trás de cada filamento e escolha o polímero ideal para a sua necessidade técnica ou artística.
+            <p className="pretty-copy mt-6 max-w-2xl text-lg font-medium leading-8 text-slate-400">
+              Resistência, flexibilidade, acabamento e exposição ao calor são
+              avaliados antes da produção. Você não precisa decidir sozinho:
+              indicamos a opção mais adequada para o uso real do projeto.
             </p>
-          </motion.div>
-        </div>
-      </section>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/orcamento"
+                className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-sky-400 px-7 py-4 font-black text-slate-950 transition-colors hover:bg-sky-300"
+              >
+                Planejar Meu Projeto
+                <ArrowRight size={20} aria-hidden="true" />
+              </Link>
+              <Link
+                href="/produtos"
+                className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-7 py-4 font-black text-white transition-colors hover:bg-white/[0.07]"
+              >
+                Ver Produtos
+              </Link>
+            </div>
+          </div>
 
-      {/* How it Works */}
-      <section className="py-32 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
-             <div className="relative h-[600px] rounded-[3.5rem] overflow-hidden group shadow-2xl border border-white/5">
-                <Image 
-                  src="/assets/imagens/printing_detail.png" 
-                  alt="3D Printing Process" 
-                  fill 
-                  className="object-cover transition-transform duration-1000 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-60" />
-                <div className="absolute bottom-12 left-12 right-12">
-                   <div className="w-16 h-1 bg-blue-600 mb-6" />
-                   <p className="text-white text-2xl font-black tracking-tighter">Qualidade Industrial <br/> em Cada Camada.</p>
-                </div>
-             </div>
-             
-             <div className="space-y-12">
+          <div className="relative min-h-[24rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[#08111f] sm:min-h-[32rem]">
+            <Image
+              src="/assets/imagens/materials_hero.png"
+              alt="Amostras de materiais utilizados em impressão 3D"
+              fill
+              priority
+              sizes="(max-width: 1024px) 100vw, 44vw"
+              className="object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#030712] via-transparent to-transparent" />
+            <div className="absolute bottom-5 left-5 right-5 rounded-2xl border border-white/10 bg-[#050a13]/85 p-5 backdrop-blur-xl">
+              <div className="flex items-center gap-3">
+                <Layers3 className="text-sky-300" aria-hidden="true" />
                 <div>
-                  <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tighter">O que é <span className="text-blue-500">Impressão FDM?</span></h2>
-                  <p className="text-slate-400 text-lg leading-relaxed font-medium">
-                    Fused Deposition Modeling é o padrão-ouro para prototipagem rápida e produção de peças finais leves e resistentes.
+                  <p className="font-black text-white">Seleção técnica</p>
+                  <p className="mt-1 text-sm font-medium text-slate-400">
+                    Função, ambiente e acabamento considerados em conjunto.
                   </p>
                 </div>
-
-                <div className="space-y-10">
-                  <div className="flex gap-8 group">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center shrink-0 text-blue-500 border border-blue-500/20 group-hover:bg-blue-500 group-hover:text-white transition-all duration-500">
-                      <Layers className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black mb-2 tracking-tight">Deposição de Precisão</h3>
-                      <p className="text-slate-400 leading-relaxed font-medium">Derretemos o filamento a temperaturas precisas, depositando camadas de até 0,1mm para garantir acabamento suave e fidelidade dimensional.</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-8 group">
-                    <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center shrink-0 text-indigo-400 border border-indigo-500/20 group-hover:bg-indigo-500 group-hover:text-white transition-all duration-500">
-                      <Settings className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black mb-2 tracking-tight">Otimização Geométrica</h3>
-                      <p className="text-slate-400 leading-relaxed font-medium">Utilizamos preenchimentos inteligentes internos que garantem que sua peça seja leve, porém com resistência estrutural superior.</p>
-                    </div>
-                  </div>
-                </div>
-             </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Materials Deep Dive */}
-      <section className="py-32 px-6 bg-slate-950">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-24">
-            <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tighter">O Guia de <span className="text-blue-500">Materiais</span></h2>
-            <p className="text-slate-400 text-lg font-medium">Dados técnicos comparativos para sua melhor escolha.</p>
+      <section className="content-auto px-4 py-16 sm:px-6 sm:py-24">
+        <div className="container-custom">
+          <div className="max-w-3xl">
+            <span className="eyebrow">Materiais mais usados</span>
+            <h2 className="balanced-title mt-5 text-4xl font-black tracking-[-0.045em] text-white sm:text-5xl">
+              Cada opção resolve um tipo de necessidade.
+            </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            {materials.map((m, idx) => (
-              <motion.div
-                key={m.id}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.1 }}
-                className={`flex flex-col p-8 md:p-12 rounded-[3.5rem] bg-slate-900/40 border ${m.border} ${m.glow} relative overflow-hidden group hover:bg-slate-900 transition-all duration-500`}
-              >
-                <div className="flex justify-between items-start mb-12">
-                  <div className="max-w-[70%]">
-                    <span className={`text-[10px] font-black uppercase tracking-[0.3em] mb-3 inline-block ${m.color}`}>{m.fullName}</span>
-                    <h3 className="text-6xl font-black text-white tracking-tighter">{m.name}</h3>
-                  </div>
-                  <div className={`w-16 h-16 rounded-3xl ${m.bg} flex items-center justify-center ${m.color} border ${m.border} shadow-inner`}>
-                    {m.id === "pla" && <Zap className="w-7 h-7" />}
-                    {m.id === "abs" && <Car className="w-7 h-7" />}
-                    {m.id === "petg" && <Wrench className="w-7 h-7" />}
-                    {m.id === "tpu" && <Smartphone className="w-7 h-7" />}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-10 mb-10">
-                  <div className="lg:col-span-3 space-y-6">
+          <div className="mt-10 grid gap-5 md:grid-cols-2">
+            {materials.map((material) => {
+              const Icon = material.icon;
+              return (
+                <article
+                  key={material.name}
+                  className="rounded-[1.75rem] border border-white/8 bg-[#08111f] p-6 sm:p-8"
+                >
+                  <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Principal Diferencial</h4>
-                      <p className="text-base text-slate-200 font-bold leading-relaxed">{m.applications}</p>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                        {material.bestFor}
+                      </p>
+                      <h3 className="mt-2 text-3xl font-black text-white">
+                        {material.name}
+                      </h3>
                     </div>
-                    <div>
-                      <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Exemplo no Cotidiano</h4>
-                      <div className="flex items-center gap-2 text-sm text-slate-400 font-medium italic">
-                        <ChevronRight className="w-3 h-3 text-blue-500" />
-                        "{m.dailyLife}"
-                      </div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.035]">
+                      <Icon
+                        className={material.accent}
+                        size={23}
+                        aria-hidden="true"
+                      />
                     </div>
                   </div>
-                  
-                  <div className="lg:col-span-2 space-y-5 p-6 rounded-3xl bg-slate-950/60 border border-white/5">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em]">Resistência</span>
-                      <span className="text-xs text-white font-bold leading-tight">{m.strength}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em]">Térmica</span>
-                      <span className="text-xs text-white font-bold leading-tight">{m.heatResistance}</span>
-                    </div>
-                    <p className="text-[9px] text-slate-600 font-medium pt-4 border-t border-white/5 leading-relaxed">{m.origin}</p>
-                  </div>
-                </div>
-
-                {m.image && (
-                  <div className="relative h-48 rounded-[2rem] overflow-hidden mt-auto border border-white/5">
-                    <Image src={m.image} alt={m.name} fill className="object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 scale-110 group-hover:scale-100" />
-                    <div className="absolute inset-0 bg-blue-900/10 mix-blend-overlay group-hover:opacity-0 transition-opacity" />
-                  </div>
-                )}
-              </motion.div>
-            ))}
+                  <p className="mt-5 font-medium leading-7 text-slate-400">
+                    {material.summary}
+                  </p>
+                  <ul className="mt-6 grid gap-3 sm:grid-cols-3">
+                    {material.properties.map((property) => (
+                      <li
+                        key={property}
+                        className="flex items-center gap-2 text-sm font-bold text-slate-300"
+                      >
+                        <CheckCircle2
+                          size={16}
+                          className="shrink-0 text-teal-300"
+                          aria-hidden="true"
+                        />
+                        {property}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      <FAQ />
+      <section className="px-4 pb-20 sm:px-6 sm:pb-28">
+        <div className="container-custom rounded-[2rem] border border-sky-400/18 bg-[#09182a] px-6 py-11 sm:px-10">
+          <div className="grid items-center gap-7 lg:grid-cols-[1fr_auto]">
+            <div>
+              <h2 className="text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">
+                Não sabe qual material escolher?
+              </h2>
+              <p className="mt-3 max-w-2xl font-medium leading-7 text-slate-300">
+                Descreva o uso da peça, as medidas e o ambiente. A estimativa
+                inicial já organiza as informações necessárias para orientar a
+                produção.
+              </p>
+            </div>
+            <Link
+              href="/orcamento"
+              className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-sky-400 px-7 py-4 font-black text-slate-950 transition-colors hover:bg-sky-300"
+            >
+              Criar Estimativa
+              <ArrowRight size={20} aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <Footer />
     </main>
   );

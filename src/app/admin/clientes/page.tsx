@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Contact, Plus, Edit2, Trash2, Search, User, MapPin, Phone, Instagram, AlertTriangle, TrendingUp, Save } from 'lucide-react';
 
 interface Client {
@@ -32,11 +32,7 @@ export default function ClientsPage() {
   };
   const [formData, setFormData] = useState<any>(initialForm);
 
-  useEffect(() => {
-    loadClients();
-  }, [search]);
-
-  const loadClients = async () => {
+  const loadClients = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/clients?search=${search}`);
@@ -49,7 +45,11 @@ export default function ClientsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search]);
+
+  useEffect(() => {
+    void loadClients();
+  }, [loadClients]);
 
   const openModal = async (client?: Client) => {
     if (client) {

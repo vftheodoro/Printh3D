@@ -1,4 +1,13 @@
 type ProductPayload = Record<string, unknown>;
+interface ProductDimensions {
+  largura?: unknown;
+  altura?: unknown;
+  profundidade?: unknown;
+}
+
+interface ProductAdditionalCosts {
+  material_extra?: unknown;
+}
 
 const hasOwn = (obj: ProductPayload, key: string) => Object.prototype.hasOwnProperty.call(obj, key);
 
@@ -85,7 +94,7 @@ export function sanitizeProductPayload(input: ProductPayload, mode: 'create' | '
   }
 
   if (isCreate || hasOwn(payload, 'dimensoes')) {
-    const dims: any = payload.dimensoes || {};
+    const dims = (payload.dimensoes || {}) as ProductDimensions;
     payload.dimensoes = {
       largura: toNumberOr(dims.largura, 0),
       altura: toNumberOr(dims.altura, 0),
@@ -94,7 +103,7 @@ export function sanitizeProductPayload(input: ProductPayload, mode: 'create' | '
   }
 
   if (isCreate || hasOwn(payload, 'custos_adicionais')) {
-    const extra: any = payload.custos_adicionais || {};
+    const extra = (payload.custos_adicionais || {}) as ProductAdditionalCosts;
     payload.custos_adicionais = {
       material_extra: toNumberOr(extra.material_extra, 0),
     };

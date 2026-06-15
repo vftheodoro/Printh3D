@@ -1,47 +1,68 @@
-import { NextResponse } from 'next/server';
-import { getAdminSupabase } from '@/lib/supabase';
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { apiError } from "@/lib/api-response";
+import { getAdminSupabase } from "@/lib/supabase";
+import { logger } from "@/lib/logger";
 
-// GET all items in trash
+const restoreSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
 export async function GET() {
   try {
     const supabase = getAdminSupabase();
-    
-    // Auto purge expired items first
-    await supabase.from('trash').delete().lt('expires_at', new Date().toISOString());
-
     const { data, error } = await supabase
-      .from('trash')
-      .select('*')
-      .order('deleted_at', { ascending: false });
+      .from("trash")
+      .select("*")
+      .order("deleted_at", { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json(data);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(Array.isArray(data) ? data : []);
+  } catch (error: unknown) {
+    logger.error("Failed to list trash.", {
+      action: "trash.list",
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return apiError(
+      "TRASH_LIST_FAILED",
+      "Não foi possível carregar a lixeira.",
+      500,
+    );
   }
 }
 
-// RESTORE item from trash
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   try {
-    const { id } = await request.json();
+    const parsed = restoreSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return apiError("INVALID_TRASH_ITEM", "Item inválido.", 400);
+    }
+
     const supabase = getAdminSupabase();
+    const { error } = await supabase.rpc("admin_restore_trash", {
+      p_trash_id: parsed.data.id,
+    });
+    if (error) throw error;
 
-    // 1. Get trash item
-    const { data: trashItem, error: fetchErr } = await supabase.from('trash').select('*').eq('id', id).single();
-    if (fetchErr || !trashItem) throw new Error('Item não encontrado na lixeira.');
-
-    const { source_store, payload } = trashItem;
-
-    // 2. Insert back into original table
-    const { error: insertErr } = await supabase.from(source_store).insert([payload]);
-    if (insertErr) throw new Error(`Falha ao restaurar: ${insertErr.message}`);
-
-    // 3. Remove from trash
-    await supabase.from('trash').delete().eq('id', id);
-
+    logger.info("Trash item restored.", {
+      requestId,
+      actorId: Number(request.headers.get("x-admin-user-id")) || undefined,
+      action: "trash.restore",
+      resource: "trash",
+      resourceId: parsed.data.id,
+    });
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    logger.error("Failed to restore trash item.", {
+      requestId,
+      action: "trash.restore",
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return apiError(
+      "TRASH_RESTORE_FAILED",
+      error instanceof Error ? error.message : "Não foi possível restaurar.",
+      400,
+    );
   }
 }

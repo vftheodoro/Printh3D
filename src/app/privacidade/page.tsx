@@ -7,7 +7,7 @@ import { ShieldCheck, Lock, EyeOff, Database } from "lucide-react";
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen flex flex-col bg-slate-950 text-white">
+    <main id="conteudo-principal" className="min-h-screen flex flex-col bg-slate-950 text-white">
       <Navbar />
       
       <section className="pt-48 pb-24 px-6 relative">

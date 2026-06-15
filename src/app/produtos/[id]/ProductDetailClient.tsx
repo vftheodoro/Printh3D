@@ -1,255 +1,331 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import {
+  ChevronRight,
+  Info,
+  MessageCircle,
+  Palette,
+  Ruler,
+  ShoppingBag,
+  Sparkles,
+} from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { Product, ProductVariation } from "@/lib/products";
+import type { Product } from "@/lib/products";
+import { cleanProductDescription, formatCurrency } from "@/lib/format";
 import { getWhatsAppLink, productMessage } from "@/lib/whatsapp";
-import { motion } from "framer-motion";
-import Image from "next/image";
-import { ChevronLeft, MessageCircle, Info, Palette, Sparkles, ShoppingBag, ChevronRight, ChevronDown } from "lucide-react";
 
-export default function ProductDetailClient({ product }: { product: Product | undefined }) {
-  const router = useRouter();
+function resolveImageUrl(image: string) {
+  if (
+    image.startsWith("http://") ||
+    image.startsWith("https://") ||
+    image.startsWith("/")
+  ) {
+    return image;
+  }
+  return `/assets/imagens/${image}`;
+}
 
+export default function ProductDetailClient({
+  product,
+}: {
+  product: Product | undefined;
+}) {
   const [color, setColor] = useState(product?.colors?.[0] || "");
   const [finish, setFinish] = useState(product?.finishes?.[0] || "");
-  const [selectedVariationId, setSelectedVariationId] = useState<string | null>(null);
+  const [selectedVariationId, setSelectedVariationId] = useState<string | null>(
+    null,
+  );
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-  const selectedVariation = useMemo(() => {
-    if (!product?.variations || !selectedVariationId) return null;
-    return product.variations.find(v => v.id === selectedVariationId);
-  }, [product?.variations, selectedVariationId]);
-
+  const selectedVariation = product?.variations?.find(
+    (variation) => variation.id === selectedVariationId,
+  );
   const currentProduct = selectedVariation || product;
-  const currentPrice = currentProduct?.promotional_price ?? currentProduct?.price ?? 0;
+  const currentPrice =
+    currentProduct?.promotional_price ?? currentProduct?.price ?? 0;
   const originalPrice = currentProduct?.price ?? 0;
 
-  // Collect all images from product and its variations
-  const allImages = useMemo(() => {
-    const images: { id: string; url: string; name: string }[] = [];
-    
-    if (product?.image) {
-      images.push({ id: 'main', url: product.image, name: product.name });
-    }
-
-    if (product?.variations) {
-      product.variations.forEach((v, idx) => {
-        if (v.image && !images.some(img => img.url === v.image)) {
-          images.push({ id: `var-${v.dbId}`, url: v.image, name: v.name });
-        }
+  const images = useMemo(() => {
+    if (!product) return [];
+    const result: { id: string; url: string; name: string }[] = [];
+    if (product.image) {
+      result.push({
+        id: "main",
+        url: resolveImageUrl(product.image),
+        name: product.name,
       });
     }
-
-    return images.length > 0 ? images : [{ id: 'placeholder', url: '/assets/imagens/design_screen.png', name: 'Imagem' }];
+    product.variations?.forEach((variation) => {
+      if (variation.image) {
+        const url = resolveImageUrl(variation.image);
+        if (!result.some((image) => image.url === url)) {
+          result.push({ id: variation.id, url, name: variation.name });
+        }
+      }
+    });
+    return result.length
+      ? result
+      : [
+          {
+            id: "fallback",
+            url: "/assets/imagens/design_screen.png",
+            name: "Processo de modelagem 3D",
+          },
+        ];
   }, [product]);
 
   if (!product) {
     return (
-      <main className="min-h-screen flex flex-col">
+      <main id="conteudo-principal" className="min-h-screen bg-[#030712]">
         <Navbar />
-        <div className="flex-grow flex flex-col items-center justify-center py-20">
-          <h1 className="text-3xl font-bold mb-4">Produto não encontrado</h1>
-          <button onClick={() => router.push("/produtos")} className="text-blue-500 font-bold hover:underline">
-            Voltar ao catálogo
-          </button>
-        </div>
+        <section className="container-custom flex min-h-[70vh] flex-col items-center justify-center pt-28 text-center">
+          <h1 className="text-4xl font-black text-white">
+            Produto não encontrado
+          </h1>
+          <p className="mt-3 font-medium text-slate-400">
+            O item pode ter sido removido ou estar temporariamente indisponível.
+          </p>
+          <Link
+            href="/produtos"
+            className="mt-7 rounded-xl bg-sky-400 px-6 py-3 font-black text-slate-950"
+          >
+            Voltar ao Catálogo
+          </Link>
+        </section>
         <Footer />
       </main>
     );
   }
 
-  const handleBuy = () => {
-    const message = productMessage({
-      name: selectedVariation?.name || product.name,
-      price: currentPrice,
-      material: selectedVariation?.material || product.material,
-      color,
-      finish
-    });
-    window.open(getWhatsAppLink(message), "_blank");
-  };
+  const buyMessage = productMessage({
+    name: selectedVariation?.name || product.name,
+    price: currentPrice,
+    material: selectedVariation?.material || product.material,
+    color,
+    finish,
+  });
 
   return (
-    <main className="min-h-screen flex flex-col bg-slate-950 text-white">
+    <main id="conteudo-principal" className="min-h-screen bg-[#030712]">
       <Navbar />
-
-      <section className="pt-24 lg:pt-32 pb-12 lg:pb-20 px-6">
-        <div className="max-w-6xl mx-auto">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8 lg:mb-12 group"
+      <section className="px-4 pb-20 pt-28 sm:px-6 sm:pt-36">
+        <div className="container-custom">
+          <nav
+            className="mb-7 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500"
+            aria-label="Breadcrumb"
           >
-            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-            Voltar
-          </button>
+            <Link href="/" className="hover:text-white">
+              Início
+            </Link>
+            <ChevronRight size={15} aria-hidden="true" />
+            <Link href="/produtos" className="hover:text-white">
+              Produtos
+            </Link>
+            <ChevronRight size={15} aria-hidden="true" />
+            <span className="max-w-[16rem] truncate text-slate-300">
+              {product.name}
+            </span>
+          </nav>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
-            {/* Image Section */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex flex-col gap-4"
-            >
-              <div className="relative aspect-square rounded-[2rem] bg-slate-900 border border-white/5 overflow-hidden flex items-center justify-center">
-                {allImages[activeImageIndex]?.url ? (
-                  <Image
-                    src={allImages[activeImageIndex].url}
-                    alt={allImages[activeImageIndex].name}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="text-center p-12">
-                    <span className="text-9xl font-black text-white/5 block mb-4">3D</span>
-                    <span className="text-slate-500 text-sm font-medium uppercase tracking-widest">Imagem Ilustrativa</span>
-                  </div>
-                )}
+          <div className="grid items-start gap-10 lg:grid-cols-2 lg:gap-16">
+            <div>
+              <div className="relative aspect-square overflow-hidden rounded-[2rem] border border-white/8 bg-[#08111f]">
+                <Image
+                  src={images[activeImageIndex].url}
+                  alt={images[activeImageIndex].name}
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="object-cover"
+                />
               </div>
 
-              {/* Image Gallery Thumbnail */}
-              {allImages.length > 1 && (
-                <div className="flex gap-3 overflow-x-auto pb-2">
-                  {allImages.map((img, idx) => (
+              {images.length > 1 ? (
+                <div
+                  className="mt-4 flex gap-3 overflow-x-auto pb-2"
+                  aria-label="Galeria do produto"
+                >
+                  {images.map((image, index) => (
                     <button
-                      key={img.id}
-                      onClick={() => setActiveImageIndex(idx)}
-                      className={`relative w-20 h-20 rounded-lg border-2 flex-shrink-0 overflow-hidden transition-all ${
-                        activeImageIndex === idx
-                          ? 'border-blue-500 ring-2 ring-blue-500/30'
-                          : 'border-white/10 hover:border-white/20'
+                      key={image.id}
+                      type="button"
+                      onClick={() => setActiveImageIndex(index)}
+                      aria-label={`Ver imagem ${index + 1}`}
+                      aria-pressed={activeImageIndex === index}
+                      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 ${
+                        activeImageIndex === index
+                          ? "border-sky-400"
+                          : "border-white/8"
                       }`}
                     >
                       <Image
-                        src={img.url}
-                        alt={img.name}
+                        src={image.url}
+                        alt=""
                         fill
+                        sizes="80px"
                         className="object-cover"
                       />
                     </button>
                   ))}
                 </div>
-              )}
-            </motion.div>
+              ) : null}
+            </div>
 
-            {/* Info Section */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-bold uppercase tracking-wider">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-lg bg-sky-400/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-sky-300">
                   {product.category}
                 </span>
-                <span className="text-sm text-slate-400 flex items-center gap-1">
-                  <Info className="w-4 h-4" /> {currentProduct?.material}
+                <span className="flex items-center gap-2 text-sm font-bold text-slate-400">
+                  <Info size={16} aria-hidden="true" />
+                  {currentProduct?.material}
                 </span>
               </div>
 
-              <h1 className="text-3xl md:text-5xl font-extrabold mb-4 lg:mb-6 leading-tight">
+              <h1 className="balanced-title mt-5 break-words text-4xl font-black leading-[1.03] tracking-[-0.045em] text-white sm:text-5xl">
                 {selectedVariation?.name || product.name}
               </h1>
 
-              <div className="text-3xl font-black text-white mb-8 flex items-baseline gap-2">
-                R$ {currentPrice.toFixed(2)}
-                {product.promotional_price && (
-                   <span className="text-sm text-slate-500 line-through ml-2">R$ {originalPrice.toFixed(2)}</span>
-                )}
+              <div className="mt-6">
+                <strong className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                  {formatCurrency(currentPrice)}
+                </strong>
+                {currentProduct?.promotional_price ? (
+                  <span className="ml-3 text-sm font-bold text-slate-600 line-through">
+                    {formatCurrency(originalPrice)}
+                  </span>
+                ) : null}
               </div>
 
-              {product.variations && product.variations.length > 0 && (
-                <div className="mb-8 p-4 lg:p-6 bg-slate-900/40 rounded-2xl border border-white/5">
-                  <label className="flex items-center gap-2 text-sm font-bold mb-3 lg:mb-4">
-                    <ChevronDown className="w-4 h-4 text-blue-500" /> Variações Disponíveis
-                  </label>
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                    {product.variations.map((variation) => (
-                      <button
-                        key={variation.id}
-                        onClick={() => setSelectedVariationId(variation.id)}
-                        className={`w-full flex items-center justify-between p-4 rounded-lg border-2 transition-all text-left ${
-                          selectedVariationId === variation.id
-                            ? 'border-blue-500 bg-blue-500/10'
-                            : 'border-white/5 bg-slate-800/40 hover:border-white/10'
-                        }`}
-                      >
-                        <div className="flex-grow">
-                          <div className="font-bold text-white">{variation.name}</div>
-                          <div className="text-sm text-slate-400">{variation.material}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-black text-white">R$ {(variation.promotional_price ?? variation.price).toFixed(2)}</div>
-                          {variation.promotional_price && (
-                            <div className="text-xs text-slate-500 line-through">R$ {variation.price.toFixed(2)}</div>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <p className="text-slate-400 leading-relaxed mb-8 lg:mb-10 text-base lg:text-lg font-medium">
-                {product.fullDesc}
+              <p className="pretty-copy mt-7 whitespace-pre-line text-lg font-medium leading-relaxed text-slate-400">
+                {cleanProductDescription(product.fullDesc)}
               </p>
 
-              <div className="space-y-8 mb-12">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-bold mb-3">
-                      <Palette className="w-4 h-4 text-blue-500" /> Cor
-                    </label>
-                    <select
-                      value={color}
-                      onChange={(e) => setColor(e.target.value)}
-                      className="w-full bg-slate-900 border border-white/5 rounded-xl py-3 px-4 focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
-                    >
-                      {product.colors.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+              {product.variations?.length ? (
+                <fieldset className="mt-8">
+                  <legend className="mb-3 text-sm font-black text-slate-200">
+                    Escolha uma Variação
+                  </legend>
+                  <div className="grid gap-2">
+                    {product.variations.map((variation) => {
+                      const active = selectedVariationId === variation.id;
+                      return (
+                        <button
+                          key={variation.id}
+                          type="button"
+                          onClick={() => setSelectedVariationId(variation.id)}
+                          aria-pressed={active}
+                          className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-4 text-left ${
+                            active
+                              ? "border-sky-400 bg-sky-400/8"
+                              : "border-white/8 bg-white/[0.02] hover:border-white/15"
+                          }`}
+                        >
+                          <span className="min-w-0">
+                            <strong className="block truncate text-white">
+                              {variation.name}
+                            </strong>
+                            <small className="font-bold text-slate-500">
+                              {variation.material}
+                            </small>
+                          </span>
+                          <strong className="shrink-0 text-white">
+                            {formatCurrency(
+                              variation.promotional_price ?? variation.price,
+                            )}
+                          </strong>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-bold mb-3">
-                      <Sparkles className="w-4 h-4 text-blue-500" /> Acabamento
-                    </label>
-                    <select
-                      value={finish}
-                      onChange={(e) => setFinish(e.target.value)}
-                      className="w-full bg-slate-900 border border-white/5 rounded-xl py-3 px-4 focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
-                    >
-                      {product.finishes.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
+                </fieldset>
+              ) : null}
 
-              <button
-                onClick={handleBuy}
-                className="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98]"
-              >
-                <MessageCircle className="w-6 h-6" />
-                COMPRAR PELO WHATSAPP
-              </button>
-
-              <div className="mt-8 p-6 bg-slate-900 border border-white/5 rounded-2xl flex items-center gap-6 group hover:border-blue-500/30 transition-all">
-                <div className="w-14 h-14 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-500 flex-shrink-0 group-hover:scale-110 transition-transform">
-                  <ShoppingBag className="w-6 h-6" />
+              <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="product-color"
+                    className="mb-2 flex items-center gap-2 text-sm font-black text-slate-200"
+                  >
+                    <Palette size={17} className="text-sky-400" aria-hidden="true" />
+                    Cor
+                  </label>
+                  <select
+                    id="product-color"
+                    value={color}
+                    onChange={(event) => setColor(event.target.value)}
+                    className="min-h-12 w-full rounded-xl border border-white/8 bg-[#08111f] px-4 text-white"
+                  >
+                    {product.colors.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <h4 className="text-sm font-black text-white mb-1">Prefere a Shopee?</h4>
-                  <p className="text-[11px] text-slate-400 font-medium mb-3">Comprou, chegou. Segurança total garantida!</p>
-                  <a href="https://shopee.com.br/printh3d" target="_blank" rel="noopener noreferrer" className="text-xs font-black text-blue-500 hover:text-blue-400 decoration-blue-500/30 underline underline-offset-4">
-                    Visitar Loja Shopee
-                  </a>
+                  <label
+                    htmlFor="product-finish"
+                    className="mb-2 flex items-center gap-2 text-sm font-black text-slate-200"
+                  >
+                    <Sparkles
+                      size={17}
+                      className="text-teal-300"
+                      aria-hidden="true"
+                    />
+                    Acabamento
+                  </label>
+                  <select
+                    id="product-finish"
+                    value={finish}
+                    onChange={(event) => setFinish(event.target.value)}
+                    className="min-h-12 w-full rounded-xl border border-white/8 bg-[#08111f] px-4 text-white"
+                  >
+                    {product.finishes.map((item) => (
+                      <option key={item}>{item}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            </motion.div>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <a
+                  href={getWhatsAppLink(buyMessage)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-14 flex-1 items-center justify-center gap-3 rounded-2xl bg-sky-400 px-6 py-4 font-black text-slate-950 transition-colors hover:bg-sky-300"
+                >
+                  <MessageCircle size={21} aria-hidden="true" />
+                  Pedir pelo WhatsApp
+                </a>
+                <Link
+                  href="/orcamento"
+                  className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl border border-white/9 bg-white/[0.03] px-6 py-4 font-black text-white hover:border-sky-400/25"
+                >
+                  <Ruler size={20} aria-hidden="true" />
+                  Personalizar
+                </Link>
+              </div>
+
+              <a
+                href="https://shopee.com.br/printh3d"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 flex items-center gap-4 rounded-2xl border border-orange-300/12 bg-orange-400/[0.04] p-4 text-sm font-bold text-slate-300 hover:border-orange-300/25"
+              >
+                <ShoppingBag
+                  size={20}
+                  className="text-orange-300"
+                  aria-hidden="true"
+                />
+                Ver disponibilidade deste produto na Shopee
+              </a>
+            </div>
           </div>
         </div>
       </section>
-
       <Footer />
     </main>
   );

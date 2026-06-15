@@ -28,17 +28,6 @@ export interface Product {
   isParent?: boolean;
 }
 
-/**
- * Mappings for categories to match frontend iconography/colors
- */
-const CATEGORY_STYLES: Record<string, { icon: string, color: string }> = {
-  colecionaveis: { icon: "sparkles", color: "#A855F7" },
-  decoracao: { icon: "home", color: "#10B981" },
-  industrial: { icon: "settings", color: "#3B82F6" },
-  utilitarios: { icon: "wrench", color: "#F59E0B" },
-  geral: { icon: "box", color: "#64748B" }
-};
-
 function pickBestImage(dbProd: any, allById: Map<number, any>): string {
   const fallback = '/assets/imagens/design_screen.png';
   const files = Array.isArray(dbProd?.product_files) ? dbProd.product_files : [];
@@ -302,7 +291,7 @@ export async function getProductById(id: string): Promise<Product | undefined> {
 
     return product;
 
-  } catch (err) {
+  } catch {
     try {
       const isNumeric = /^\d+$/.test(id);
       let query = supabase
@@ -377,7 +366,7 @@ export async function getCategories(): Promise<string[]> {
        return data.map(c => c.nome.toLowerCase());
     }
     return [];
-  } catch (err) {
+  } catch {
     return [];
   }
 }

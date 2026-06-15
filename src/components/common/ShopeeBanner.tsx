@@ -1,52 +1,42 @@
-"use client";
-
 import Image from "next/image";
-import { ShoppingBag } from "lucide-react";
+import { ArrowUpRight, ShoppingBag } from "lucide-react";
 
 export default function ShopeeBanner() {
   return (
-    <section className="pb-12 px-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="group relative p-6 md:p-8 rounded-[2rem] bg-gradient-to-r from-[#EE4D2D] to-[#ff6b4a] text-white overflow-hidden shadow-2xl shadow-orange-500/10 transition-all duration-500 hover:shadow-orange-500/30 border border-white/10 flex flex-col md:flex-row items-center justify-between gap-8 md:gap-6">
-          {/* Background Effects */}
-          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-white/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-700 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-[60px] translate-y-1/2 -translate-x-1/2 pointer-events-none" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-6 w-full">
-            <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:-rotate-3 transition-transform duration-500 p-2.5 border-4 border-white/20">
-              <Image 
-                src="/assets/logos/shopee_logo.png" 
-                alt="Shopee Logo" 
-                width={50} 
-                height={50} 
-                className="object-contain"
+    <section className="px-4 pb-16 sm:px-6 sm:pb-20">
+      <div className="container-custom">
+        <div className="flex flex-col items-start justify-between gap-6 rounded-[1.75rem] border border-orange-300/15 bg-[#17100d] p-6 sm:flex-row sm:items-center sm:p-8">
+          <div className="flex items-center gap-4">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white p-2">
+              <Image
+                src="/assets/logos/shopee_logo.png"
+                alt=""
+                width={42}
+                height={42}
               />
-            </div>
-            <div className="flex flex-col justify-center h-full">
-              <div className="flex justify-center md:justify-start mb-2">
-                <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-[9px] font-black uppercase tracking-[0.2em] border border-white/20 flex items-center gap-1.5 shadow-sm">
-                  <ShoppingBag className="w-3 h-3" /> Compra Garantida
-                </span>
-              </div>
-              <h2 className="text-xl md:text-2xl font-black tracking-tighter leading-tight mb-1">
-                Prefere comprar <span className="text-orange-100">pela Shopee?</span>
+            </span>
+            <div>
+              <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-orange-300">
+                <ShoppingBag size={14} aria-hidden="true" />
+                Canal Alternativo
+              </span>
+              <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">
+                Prefere comprar pela Shopee?
               </h2>
-              <p className="text-orange-50/80 text-xs md:text-sm font-medium max-w-md leading-relaxed hidden md:block">
-                Aproveite a segurança da plataforma, cupons e frete grátis em nossa loja oficial.
+              <p className="mt-1 text-sm font-medium text-orange-100/65">
+                Acesse a loja oficial e use os recursos da plataforma.
               </p>
             </div>
           </div>
 
-          <a 
-            href="https://shopee.com.br/printh3d" 
-            target="_blank" 
+          <a
+            href="https://shopee.com.br/printh3d"
+            target="_blank"
             rel="noopener noreferrer"
-            className="relative z-10 whitespace-nowrap inline-flex items-center justify-center gap-2 bg-white text-[#EE4D2D] px-8 py-3.5 rounded-xl font-black text-xs shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all hover:scale-105 active:scale-95 group/btn overflow-hidden w-full md:w-auto tracking-widest"
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#ee4d2d] px-6 py-3 font-black text-white transition-colors hover:bg-[#ff684a] sm:w-auto"
           >
-            VISITAR LOJA
-            <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
+            Visitar Loja
+            <ArrowUpRight size={18} aria-hidden="true" />
           </a>
         </div>
       </div>

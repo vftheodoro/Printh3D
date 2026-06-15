@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { ChevronUp } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 
 export default function BackToTop() {
   const [isVisible, setIsVisible] = useState(false);
@@ -21,25 +20,25 @@ export default function BackToTop() {
   }, []);
 
   const scrollToTop = () => {
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     window.scrollTo({
       top: 0,
-      behavior: "smooth",
+      behavior: reduceMotion ? "auto" : "smooth",
     });
   };
 
+  if (!isVisible) return null;
+
   return (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.button
-          initial={{ opacity: 0, scale: 0.8, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.8, y: 20 }}
-          onClick={scrollToTop}
-          className="fixed bottom-8 right-8 z-40 w-14 h-14 rounded-2xl bg-blue-600/90 backdrop-blur-md text-white flex items-center justify-center shadow-2xl shadow-blue-500/30 border border-white/10 hover:bg-blue-500 transition-all hover:-translate-y-1 active:scale-95"
-        >
-          <ChevronUp className="w-7 h-7" />
-        </motion.button>
-      )}
-    </AnimatePresence>
+    <button
+      type="button"
+      onClick={scrollToTop}
+      className="fixed bottom-4 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-sky-500/90 text-white shadow-2xl shadow-sky-500/20 backdrop-blur-md transition-colors hover:bg-sky-400 sm:bottom-8 sm:right-8"
+      aria-label="Voltar ao início da página"
+    >
+      <ChevronUp className="h-6 w-6" aria-hidden="true" />
+    </button>
   );
 }

@@ -1,87 +1,113 @@
-import { NextResponse } from 'next/server';
-import { getAdminSupabase } from '@/lib/supabase';
-import { verifyPassword, createAdminSession } from '@/lib/admin-auth';
-
-// Simple in-memory rate limiting (for demo/small scale)
-const rateLimits = new Map<string, { count: number; expiresAt: number }>();
+import { getAdminSupabase } from "@/lib/supabase";
+import { verifyPassword, createAdminSession } from "@/lib/admin-auth";
+import { apiError, apiSuccess } from "@/lib/api-response";
+import { logger } from "@/lib/logger";
+import { isAdminRole } from "@/modules/auth/domain";
+import { loginSchema } from "@/modules/auth/schemas";
+import {
+  checkLoginRateLimit,
+  recordLoginAttempt,
+} from "@/modules/auth/server/login-rate-limit";
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+
   try {
-    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
-    const now = Date.now();
-    const rateLimit = rateLimits.get(ip);
-    
-    // Check rate limit: max 5 attempts per 15 mins
-    if (rateLimit && now < rateLimit.expiresAt && rateLimit.count >= 5) {
-      return NextResponse.json({ error: 'Muitas tentativas falhas. Tente novamente em 15 minutos.' }, { status: 429 });
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    const ip = forwardedFor?.split(",")[0]?.trim() || "127.0.0.1";
+    const rateLimit = await checkLoginRateLimit(ip);
+
+    if (!rateLimit.allowed) {
+      return apiError(
+        "RATE_LIMITED",
+        "Muitas tentativas falhas. Aguarde alguns minutos e tente novamente.",
+        429,
+      );
     }
 
-    const { email: rawEmail, password } = await request.json();
-
-    if (!rawEmail || !password) {
-      return NextResponse.json({ error: 'Email e senha são obrigatórios.' }, { status: 400 });
+    const parsed = loginSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return apiError(
+        "INVALID_CREDENTIALS_PAYLOAD",
+        "Revise os dados informados.",
+        400,
+        parsed.error.flatten().fieldErrors,
+      );
     }
 
-    const email = rawEmail.trim().toLowerCase();
-
+    const { email, password } = parsed.data;
     const supabase = getAdminSupabase();
-    
-    // Fetch user from admin_users
     const { data: user, error } = await supabase
-      .from('admin_users')
-      .select('*')
-      .eq('email', email)
-      .single();
+      .from("admin_users")
+      .select("id, nome, email, senha_hash, tipo")
+      .eq("email", email)
+      .maybeSingle();
 
-    if (error || !user) {
-      // Record failed attempt
-      const count = rateLimit && now < rateLimit.expiresAt ? rateLimit.count + 1 : 1;
-      rateLimits.set(ip, { count, expiresAt: now + 15 * 60 * 1000 });
-      return NextResponse.json({ error: 'Credenciais inválidas.' }, { status: 401 });
+    if (error || !user || !isAdminRole(user.tipo)) {
+      await recordLoginAttempt(ip, false);
+      return apiError("INVALID_CREDENTIALS", "Credenciais inválidas.", 401);
     }
 
-    // Verify password using bcrypt
     const isValid = await verifyPassword(password, user.senha_hash);
-
     if (!isValid) {
-      const count = rateLimit && now < rateLimit.expiresAt ? rateLimit.count + 1 : 1;
-      rateLimits.set(ip, { count, expiresAt: now + 15 * 60 * 1000 });
-      return NextResponse.json({ error: 'Credenciais inválidas.' }, { status: 401 });
+      await recordLoginAttempt(ip, false);
+      return apiError("INVALID_CREDENTIALS", "Credenciais inválidas.", 401);
     }
 
-    // Reset rate limit on success
-    rateLimits.delete(ip);
+    await recordLoginAttempt(ip, true);
 
-    // Create JWT Session string
-    const token = await createAdminSession(user.id, user.email);
+    const token = await createAdminSession(
+      String(user.id),
+      user.email,
+      user.tipo,
+    );
 
-    // Set cookie on response
-    const response = NextResponse.json({ success: true, user: { id: user.id, nome: user.nome, email: user.email, tipo: user.tipo } });
-    
+    const response = apiSuccess({
+      user: {
+        id: Number(user.id),
+        nome: String(user.nome),
+        email: String(user.email),
+        tipo: user.tipo,
+      },
+    });
+
     response.cookies.set({
-      name: 'admin_token',
+      name: "admin_token",
       value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 // 24 hours
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 8,
+    });
+
+    logger.info("Admin login succeeded.", {
+      requestId,
+      actorId: Number(user.id),
+      action: "auth.login",
     });
 
     return response;
+  } catch (error: unknown) {
+    logger.error("Admin login failed unexpectedly.", {
+      requestId,
+      action: "auth.login",
+      error: error instanceof Error ? error.message : "unknown",
+    });
 
-  } catch (error: any) {
-    console.error('Login error:', error);
     if (
-      typeof error?.message === 'string' &&
-      (error.message.includes('Missing required environment variable') ||
-        (error.message.includes('Missing ') && error.message.includes('environment variable')))
+      error instanceof Error &&
+      (error.message.includes("Missing required environment variable") ||
+        (error.message.includes("Missing ") &&
+          error.message.includes("environment variable")))
     ) {
-      return NextResponse.json(
-        { error: 'Configuração do servidor incompleta. Defina as variáveis de ambiente do Supabase e ADMIN_JWT_SECRET e tente novamente.' },
-        { status: 500 }
+      return apiError(
+        "SERVER_CONFIGURATION_ERROR",
+        "Configuração do servidor incompleta.",
+        500,
       );
     }
-    return NextResponse.json({ error: 'Erro interno no servidor.' }, { status: 500 });
+
+    return apiError("LOGIN_FAILED", "Erro interno no servidor.", 500);
   }
 }

@@ -1,36 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase';
 
-async function insertClientSafely(supabase: ReturnType<typeof getAdminSupabase>, input: any) {
+async function insertClientSafely(
+  supabase: ReturnType<typeof getAdminSupabase>,
+  input: Record<string, unknown>,
+) {
   const payload = { ...input };
   delete payload.id;
 
-  const firstTry = await supabase.from('clients').insert([payload]).select().single();
-  if (!firstTry.error) {
-    return firstTry;
-  }
-
-  const isDuplicatePk = firstTry.error.code === '23505' || firstTry.error.message?.includes('clients_pkey');
-  if (!isDuplicatePk) {
-    return firstTry;
-  }
-
-  // Fallback when sequence is out of sync: explicitly use max(id)+1.
-  const { data: lastClient, error: maxErr } = await supabase
-    .from('clients')
-    .select('id')
-    .order('id', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (maxErr) {
-    return { data: null, error: maxErr };
-  }
-
-  const safeId = (Number(lastClient?.id) || 0) + 1;
   return supabase
     .from('clients')
-    .insert([{ ...payload, id: safeId }])
+    .insert([payload])
     .select()
     .single();
 }
@@ -63,8 +43,9 @@ export async function GET(request: Request) {
       }), { purchases: 0, total_spent: 0, total_debt: 0 });
 
       // Clean up sales relation from output
-      const { sales: _, ...rest } = client;
-      return { ...rest, ...stats };
+      const clientWithoutSales = { ...client };
+      delete clientWithoutSales.sales;
+      return { ...clientWithoutSales, ...stats };
     });
 
     return NextResponse.json(processed);

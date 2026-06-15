@@ -1,101 +1,118 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { LogIn } from 'lucide-react';
+import Image from "next/image";
+import { useState } from "react";
+import { LogIn } from "lucide-react";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
     setShake(false);
 
     try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+      const payload = await response.json();
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro ao realizar login');
+      if (!response.ok) {
+        throw new Error(
+          payload?.error?.message || "Não foi possível realizar o login.",
+        );
       }
 
-      window.location.href = '/admin';
-      
-    } catch (err: any) {
-      setError(err.message);
+      window.location.assign("/admin");
+    } catch (loginError: unknown) {
+      setError(
+        loginError instanceof Error
+          ? loginError.message
+          : "Erro ao realizar login.",
+      );
       setShake(true);
-      setTimeout(() => setShake(false), 500);
+      window.setTimeout(() => setShake(false), 500);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-wrapper">
-      <div className={`login-card ${shake ? 'shake' : ''}`}>
-        <div className="login-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem' }}>
-          <img 
-            src="/assets/logos/logo_printh_azul.png" 
-            alt="Printh Logo" 
-            style={{ width: '80px', height: 'auto', marginBottom: '1rem', filter: 'drop-shadow(0 4px 12px rgba(0, 188, 255, 0.4))' }} 
+    <main className="login-wrapper">
+      <section
+        className={`login-card ${shake ? "shake" : ""}`}
+        aria-labelledby="login-title"
+      >
+        <div className="login-logo">
+          <Image
+            src="/assets/logos/logo_printh_azul.png"
+            alt="Printh3D"
+            width={80}
+            height={80}
+            priority
           />
-          <h1 style={{ fontSize: '1.8rem', margin: 0, fontWeight: 700 }}>Printh</h1>
-          <p style={{ color: '#8892b0', marginTop: '0.4rem', fontSize: '0.9rem' }}>Sistema de Gestão Integrado</p>
+          <h1 id="login-title">Printh3D</h1>
+          <p>Sistema de Gestão Integrado</p>
         </div>
 
-        {error && <div className="login-error" style={{ display: 'block' }}>{error}</div>}
+        {error ? (
+          <div className="login-error" role="alert">
+            {error}
+          </div>
+        ) : null}
 
         <form onSubmit={handleLogin}>
           <div className="form-group">
-            <label>E-mail</label>
-            <input 
-              type="email" 
+            <label htmlFor="admin-email">E-mail</label>
+            <input
+              id="admin-email"
+              name="email"
+              type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="ex: admin@printh3d.com" 
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Ex.: admin@printh3d.com"
               required
               disabled={loading}
               autoComplete="email"
+              spellCheck={false}
             />
           </div>
 
           <div className="form-group">
-            <label>Senha</label>
-            <input 
-              type="password" 
+            <label htmlFor="admin-password">Senha</label>
+            <input
+              id="admin-password"
+              name="password"
+              type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Sua senha de acesso" 
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Sua senha de acesso…"
               required
+              minLength={8}
               disabled={loading}
               autoComplete="current-password"
             />
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            <LogIn size={15} /> {loading ? 'Entrando...' : 'Entrar no Sistema'}
+            <LogIn size={16} aria-hidden="true" />
+            {loading ? "Entrando…" : "Entrar no Sistema"}
           </button>
         </form>
 
-        <div className="login-info">
-          <p>
-            Acesso restrito para administradores e equipe <strong>Printh</strong>.<br />
-            Certifique-se de estar em uma rede segura.
-          </p>
-        </div>
-      </div>
-    </div>
+        <p className="login-info">
+          Acesso restrito à equipe Printh3D. Use somente dispositivos e redes
+          confiáveis.
+        </p>
+      </section>
+    </main>
   );
 }

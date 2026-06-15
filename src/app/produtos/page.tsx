@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getAllProducts, getCategories, Product } from "@/lib/products";
 import CatalogClient from "./CatalogClient";
 
@@ -10,6 +11,23 @@ export default async function Catalog() {
   const categories: string[] = await getCategories();
 
   return (
-    <CatalogClient initialProducts={products} initialCategories={categories} />
+    <Suspense fallback={<CatalogLoading />}>
+      <CatalogClient
+        initialProducts={products}
+        initialCategories={categories}
+      />
+    </Suspense>
+  );
+}
+
+function CatalogLoading() {
+  return (
+    <main
+      id="conteudo-principal"
+      className="flex min-h-screen items-center justify-center bg-[#030712]"
+      aria-busy="true"
+    >
+      <p className="font-bold text-slate-400">Carregando catálogo...</p>
+    </main>
   );
 }

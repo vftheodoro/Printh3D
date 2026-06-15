@@ -1,3 +1,6 @@
+import { formatCurrency } from "@/lib/format";
+import type { BudgetState } from "@/lib/budget";
+
 const PHONE_NUMBER = '5513997553465';
 
 export function getWhatsAppLink(message: string) {
@@ -13,7 +16,7 @@ export function productMessage({ name, price, material, color, finish }: {
 }) {
   let msg = `Olá! Tenho interesse no produto:\n`;
   msg += `*${name}*\n\n`;
-  msg += `Preço: R$ ${price.toFixed(2)}\n`;
+  msg += `Preço: ${formatCurrency(price)}\n`;
   msg += `Material: ${material}\n`;
   if (color) msg += `Cor: ${color}\n`;
   if (finish) msg += `Acabamento: ${finish}\n`;
@@ -21,7 +24,13 @@ export function productMessage({ name, price, material, color, finish }: {
   return msg;
 }
 
-export function budgetMessage(data: any) {
+interface BudgetMessageData extends BudgetState {
+  useCaseLabel: string;
+  estimatedMin: number;
+  estimatedMax: number;
+}
+
+export function budgetMessage(data: BudgetMessageData) {
   const {
     useCaseLabel,
     width,
@@ -49,8 +58,8 @@ export function budgetMessage(data: any) {
   msg += `Quantidade: ${quantity}\n`;
   msg += `Prazo: ${urgency}\n`;
   if (notes) msg += `Observações: ${notes}\n`;
-  msg += `\n*Faixa estimada: R$ ${estimatedMin.toFixed(2)} até R$ ${estimatedMax.toFixed(2)}*\n`;
-  msg += `⚠️ Entendo que esta é uma estimativa inicial e o valor final pode variar após análise detalhada.\n`;
+  msg += `\n*Faixa estimada: ${formatCurrency(estimatedMin)} até ${formatCurrency(estimatedMax)}*\n`;
+  msg += `Esta é uma estimativa inicial. O valor final depende da análise do arquivo e da geometria real.\n`;
   msg += `\nAguardo confirmação do valor final. Obrigado!`;
   return msg;
 }

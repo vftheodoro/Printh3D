@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Tag, Ticket, Plus, Edit2, Trash2, Calendar, Search } from 'lucide-react';
+import { Tag, Ticket, Plus, Edit2, Trash2, Calendar } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -33,11 +33,6 @@ interface Coupon {
   ativo: boolean;
 }
 
-interface Category {
-  id: number;
-  nome: string;
-}
-
 export default function PromotionsPage() {
   const [activeTab, setActiveTab] = useState<'promotions' | 'coupons'>('promotions');
   
@@ -45,7 +40,6 @@ export default function PromotionsPage() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal State - Promotions
@@ -73,16 +67,14 @@ export default function PromotionsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [promoRes, couponRes, prodRes, catRes] = await Promise.all([
+      const [promoRes, couponRes, prodRes] = await Promise.all([
         fetch('/api/admin/promotions'),
         fetch('/api/admin/coupons'),
-        fetch('/api/admin/products'),
-        fetch('/api/admin/categories')
+        fetch('/api/admin/products')
       ]);
       setPromotions(await promoRes.json());
       setCoupons(await couponRes.json());
       setProducts(await prodRes.json());
-      setCategories(await catRes.json());
     } catch (err) {
       console.error(err);
     } finally {

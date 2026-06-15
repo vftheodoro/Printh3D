@@ -12,6 +12,11 @@
 
 # testing
 /coverage
+/artifacts
+
+# local tooling
+/.codex-dev.*.log
+/supabase/.temp/
 
 # next.js
 /.next/

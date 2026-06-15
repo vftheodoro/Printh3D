@@ -5,7 +5,6 @@ import {
   DollarSign,
   TrendingUp,
   BarChart3,
-  Trophy,
   Package,
   Users,
   ShoppingCart,

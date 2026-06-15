@@ -1,185 +1,315 @@
-import { NextResponse } from 'next/server';
-import { getAdminSupabase } from '@/lib/supabase';
+import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-response";
+import { getAdminSupabase } from "@/lib/supabase";
+import { logger } from "@/lib/logger";
 
-const SUPPORTED_ENTITY_TABLES = {
-  product: 'product_files',
-  sale: 'sale_files',
+const ENTITY_CONFIG = {
+  product: {
+    filesTable: "product_files",
+    ownerTable: "products",
+    ownerColumn: "product_id",
+  },
+  sale: {
+    filesTable: "sale_files",
+    ownerTable: "sales",
+    ownerColumn: "sale_id",
+  },
 } as const;
 
-type SupportedEntity = keyof typeof SUPPORTED_ENTITY_TABLES;
+type FileCategory = "image" | "document" | "model";
 
-function getStorageBucket(): string {
-  return process.env.SUPABASE_STORAGE_BUCKET || 'printh3d-files';
+const FILE_RULES: Record<
+  string,
+  { category: FileCategory; mimeTypes: readonly string[]; maxBytes: number }
+> = {
+  jpg: {
+    category: "image",
+    mimeTypes: ["image/jpeg"],
+    maxBytes: 10 * 1024 * 1024,
+  },
+  jpeg: {
+    category: "image",
+    mimeTypes: ["image/jpeg"],
+    maxBytes: 10 * 1024 * 1024,
+  },
+  png: {
+    category: "image",
+    mimeTypes: ["image/png"],
+    maxBytes: 10 * 1024 * 1024,
+  },
+  webp: {
+    category: "image",
+    mimeTypes: ["image/webp"],
+    maxBytes: 10 * 1024 * 1024,
+  },
+  pdf: {
+    category: "document",
+    mimeTypes: ["application/pdf"],
+    maxBytes: 25 * 1024 * 1024,
+  },
+  txt: {
+    category: "document",
+    mimeTypes: ["text/plain", "application/octet-stream"],
+    maxBytes: 5 * 1024 * 1024,
+  },
+  stl: {
+    category: "model",
+    mimeTypes: [
+      "model/stl",
+      "application/sla",
+      "application/vnd.ms-pki.stl",
+      "application/octet-stream",
+    ],
+    maxBytes: 50 * 1024 * 1024,
+  },
+  obj: {
+    category: "model",
+    mimeTypes: ["model/obj", "text/plain", "application/octet-stream"],
+    maxBytes: 50 * 1024 * 1024,
+  },
+  "3mf": {
+    category: "model",
+    mimeTypes: [
+      "model/3mf",
+      "application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
+      "application/octet-stream",
+      "application/zip",
+    ],
+    maxBytes: 50 * 1024 * 1024,
+  },
+  step: {
+    category: "model",
+    mimeTypes: ["model/step", "application/step", "application/octet-stream"],
+    maxBytes: 50 * 1024 * 1024,
+  },
+  stp: {
+    category: "model",
+    mimeTypes: ["model/step", "application/step", "application/octet-stream"],
+    maxBytes: 50 * 1024 * 1024,
+  },
+  zip: {
+    category: "model",
+    mimeTypes: ["application/zip", "application/x-zip-compressed"],
+    maxBytes: 50 * 1024 * 1024,
+  },
+};
+
+function normalizeEntity(value: FormDataEntryValue | string | null) {
+  return value === "sale" ? "sale" : "product";
 }
 
-function normalizeEntity(value: string | null): SupportedEntity {
-  if (value === 'sale') return 'sale';
-  return 'product';
-}
-
-function getEntityColumn(entity: SupportedEntity): string {
-  return entity === 'sale' ? 'sale_id' : 'product_id';
-}
-
-function inferFileType(fileName: string, mimeType: string): 'image' | 'document' | 'other' {
-  const lowerName = fileName.toLowerCase();
-  const lowerMime = (mimeType || '').toLowerCase();
-
-  if (lowerMime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(lowerName)) {
-    return 'image';
-  }
-  if (lowerMime.includes('pdf') || /\.(pdf|doc|docx|txt|xls|xlsx)$/.test(lowerName)) {
-    return 'document';
-  }
-  // Arquivos de modelo 3D, compactados e outros tipos vão como 'other'
-  // (ex: .stl, .obj, .3mf, .step, .stp, .rar, .zip)
-  return 'other';
-}
-
-function sanitizeFileName(fileName: string): string {
+function sanitizeFileName(fileName: string) {
   return fileName
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 180);
+}
+
+function getExtension(fileName: string) {
+  return fileName.toLowerCase().split(".").pop() || "";
+}
+
+function hasValidSignature(extension: string, buffer: Buffer) {
+  if (extension === "jpg" || extension === "jpeg") {
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (extension === "png") {
+    return buffer.subarray(0, 8).equals(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
+  }
+  if (extension === "webp") {
+    return (
+      buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    );
+  }
+  if (extension === "pdf") {
+    return buffer.subarray(0, 5).toString("ascii") === "%PDF-";
+  }
+  if (extension === "zip" || extension === "3mf") {
+    return buffer[0] === 0x50 && buffer[1] === 0x4b;
+  }
+  return buffer.length > 0;
+}
+
+function getStorageBucket() {
+  return process.env.SUPABASE_STORAGE_BUCKET || "printh3d-files";
 }
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const entity = normalizeEntity(searchParams.get('entity'));
-    const entityId = searchParams.get('entity_id') || searchParams.get(`${entity}_id`);
+    const entity = normalizeEntity(searchParams.get("entity"));
+    const entityId = Number(
+      searchParams.get("entity_id") || searchParams.get(`${entity}_id`),
+    );
 
-    if (!entityId) {
-      return NextResponse.json({ error: 'Parâmetro entity_id é obrigatório.' }, { status: 400 });
+    if (!Number.isInteger(entityId) || entityId <= 0) {
+      return apiError("INVALID_ENTITY_ID", "Informe um registro válido.", 400);
     }
 
-    const table = SUPPORTED_ENTITY_TABLES[entity];
-    const entityColumn = getEntityColumn(entity);
-
+    const config = ENTITY_CONFIG[entity];
     const supabase = getAdminSupabase();
     const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .eq(entityColumn, Number(entityId))
-      .order('created_at', { ascending: false });
+      .from(config.filesTable)
+      .select("*")
+      .eq(config.ownerColumn, entityId)
+      .order("created_at", { ascending: false });
 
     if (error) throw error;
     return NextResponse.json(Array.isArray(data) ? data : []);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao listar arquivos.' }, { status: 500 });
+  } catch (error: unknown) {
+    logger.error("Failed to list files.", {
+      action: "files.list",
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return apiError(
+      "FILES_LIST_FAILED",
+      "Não foi possível carregar os arquivos.",
+      500,
+    );
   }
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+  let uploadedStoragePath: string | null = null;
+
   try {
     const formData = await request.formData();
+    const entity = normalizeEntity(formData.get("entity"));
+    const entityId = Number(
+      formData.get("entity_id") || formData.get(`${entity}_id`),
+    );
+    const file = formData.get("file");
 
-    const entity = normalizeEntity(String(formData.get('entity') || 'product'));
-    const entityIdRaw = formData.get('entity_id') || formData.get(`${entity}_id`);
-    const file = formData.get('file');
-
-    if (!entityIdRaw) {
-      return NextResponse.json({ error: 'Parâmetro entity_id é obrigatório.' }, { status: 400 });
+    if (!Number.isInteger(entityId) || entityId <= 0) {
+      return apiError("INVALID_ENTITY_ID", "Informe um registro válido.", 400);
     }
-
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'Arquivo inválido.' }, { status: 400 });
+      return apiError("INVALID_FILE", "Selecione um arquivo válido.", 400);
     }
 
-    const entityId = Number(entityIdRaw);
-    if (!Number.isFinite(entityId) || entityId <= 0) {
-      return NextResponse.json({ error: 'entity_id inválido.' }, { status: 400 });
+    const safeFileName = sanitizeFileName(file.name || "arquivo");
+    const extension = getExtension(safeFileName);
+    const rule = FILE_RULES[extension];
+
+    if (!rule) {
+      return apiError(
+        "UNSUPPORTED_FILE_TYPE",
+        "Formato não permitido. Use imagens JPG, PNG ou WebP; PDF, TXT; ou modelos STL, OBJ, 3MF, STEP e ZIP.",
+        400,
+      );
+    }
+    if (file.size <= 0 || file.size > rule.maxBytes) {
+      return apiError(
+        "INVALID_FILE_SIZE",
+        `O arquivo excede o limite de ${Math.round(rule.maxBytes / 1024 / 1024)} MB.`,
+        400,
+      );
     }
 
-    const maxSizeBytes = 50 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      return NextResponse.json({ error: 'Arquivo excede o limite de 50MB.' }, { status: 400 });
+    const mimeType = file.type || "application/octet-stream";
+    if (!rule.mimeTypes.includes(mimeType)) {
+      return apiError(
+        "INVALID_FILE_MIME",
+        "O conteúdo declarado não corresponde ao formato permitido.",
+        400,
+      );
     }
-
-    const safeFileName = sanitizeFileName(file.name || 'arquivo');
-    const mimeType = file.type || 'application/octet-stream';
-    const tipo = inferFileType(safeFileName, mimeType);
-
-    const ext = safeFileName.includes('.') ? safeFileName.split('.').pop() : '';
-    const uniqueName = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext ? `.${ext}` : ''}`;
-    const storagePath = `${entity}s/${entityId}/${uniqueName}`;
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const supabase = getAdminSupabase();
-    const bucket = getStorageBucket();
+    if (!hasValidSignature(extension, fileBuffer)) {
+      return apiError(
+        "INVALID_FILE_SIGNATURE",
+        "A assinatura do arquivo não corresponde ao formato informado.",
+        400,
+      );
+    }
 
+    const config = ENTITY_CONFIG[entity];
+    const supabase = getAdminSupabase();
+    const { count, error: ownerError } = await supabase
+      .from(config.ownerTable)
+      .select("id", { count: "exact", head: true })
+      .eq("id", entityId);
+
+    if (ownerError) throw ownerError;
+    if (!count) {
+      return apiError(
+        "ENTITY_NOT_FOUND",
+        "O registro relacionado não existe.",
+        404,
+      );
+    }
+
+    const uniqueName = `${crypto.randomUUID()}.${extension}`;
+    const storagePath = `${entity}s/${entityId}/${uniqueName}`;
+    uploadedStoragePath = storagePath;
+    const bucket = getStorageBucket();
     const { error: uploadError } = await supabase.storage
       .from(bucket)
       .upload(storagePath, fileBuffer, {
         contentType: mimeType,
+        cacheControl: rule.category === "image" ? "31536000" : "3600",
         upsert: false,
       });
 
-    if (uploadError) {
-      throw new Error(uploadError.message || 'Falha no upload para o storage.');
-    }
+    if (uploadError) throw uploadError;
 
-    const publicUrl = supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl;
-    const table = SUPPORTED_ENTITY_TABLES[entity];
-    const entityColumn = getEntityColumn(entity);
+    const publicUrl = supabase.storage
+      .from(bucket)
+      .getPublicUrl(storagePath).data.publicUrl;
 
     const payload: Record<string, unknown> = {
       nome_arquivo: file.name,
-      tipo,
+      tipo: rule.category === "model" ? "other" : rule.category,
       mime_type: mimeType,
       tamanho_bytes: file.size,
       storage_path: publicUrl,
+      [config.ownerColumn]: entityId,
     };
-    payload[entityColumn] = entityId;
 
-    let insertResult = await supabase
-      .from(table)
+    const { data, error } = await supabase
+      .from(config.filesTable)
       .insert([payload])
-      .select('*')
+      .select("*")
       .single();
 
-    let { data, error } = insertResult;
+    if (error) throw error;
 
-    if (error) {
-      const isPrimaryKeyCollision = error?.code === '23505' && (error?.message || '').includes(`${table}_pkey`);
-      if (isPrimaryKeyCollision) {
-        const { data: lastRow } = await supabase
-          .from(table)
-          .select('id')
-          .order('id', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const fallbackId = Number(lastRow?.id || 0) + 1;
-        const retryResult = await supabase
-          .from(table)
-          .insert([{ ...payload, id: fallbackId }])
-          .select('*')
-          .single();
-
-        if (retryResult.error) {
-          await supabase.storage.from(bucket).remove([storagePath]);
-          throw retryResult.error;
-        }
-
-        data = retryResult.data;
-        error = null;
-      } else {
-        await supabase.storage.from(bucket).remove([storagePath]);
-        throw error;
-      }
-    }
-
-    if (!data || error) {
-      await supabase.storage.from(bucket).remove([storagePath]);
-      throw new Error('Falha ao registrar arquivo no banco de dados.');
-    }
-
+    logger.info("File uploaded.", {
+      requestId,
+      actorId: Number(request.headers.get("x-admin-user-id")) || undefined,
+      action: "files.upload",
+      resource: entity,
+      resourceId: entityId,
+      extension,
+      size: file.size,
+    });
     return NextResponse.json(data, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Erro ao enviar arquivo.' }, { status: 500 });
+  } catch (error: unknown) {
+    if (uploadedStoragePath) {
+      const supabase = getAdminSupabase();
+      await supabase.storage
+        .from(getStorageBucket())
+        .remove([uploadedStoragePath]);
+    }
+
+    logger.error("Failed to upload file.", {
+      requestId,
+      action: "files.upload",
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return apiError(
+      "FILE_UPLOAD_FAILED",
+      "Não foi possível enviar o arquivo.",
+      500,
+    );
   }
 }
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";

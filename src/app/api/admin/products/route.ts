@@ -35,8 +35,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const json = await request.json();
-    const payload = sanitizeProductPayload(json, 'create');
-    const { id: _ignoredId, created_at: _ignoredCreatedAt, updated_at: _ignoredUpdatedAt, ...insertPayload } = payload;
+    const insertPayload = sanitizeProductPayload(json, 'create');
     const supabase = getAdminSupabase();
 
     // Check SKU uniqueness
@@ -60,33 +59,20 @@ export async function POST(request: Request) {
     const baseInsertPayload = {
       ...insertPayload,
       codigo_sku: finalSku,
-      dimensoes: insertPayload.dimensoes || {x:0, y:0, z:0},
+      dimensoes: insertPayload.dimensoes || {
+        largura: 0,
+        altura: 0,
+        profundidade: 0,
+      },
       custo_detalhado: insertPayload.custo_detalhado || {},
       custos_adicionais: insertPayload.custos_adicionais || {}
     };
 
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('products')
       .insert([baseInsertPayload])
       .select()
       .single();
-
-    const isPrimaryKeyCollision = error?.code === '23505' && (error?.message || '').includes('products_pkey');
-    if (isPrimaryKeyCollision) {
-      const { data: lastRow } = await supabase
-        .from('products')
-        .select('id')
-        .order('id', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const fallbackId = Number(lastRow?.id || 0) + 1;
-      ({ data, error } = await supabase
-        .from('products')
-        .insert([{ ...baseInsertPayload, id: fallbackId }])
-        .select()
-        .single());
-    }
 
     if (error) {
       console.error('POST /api/admin/products failed:', {

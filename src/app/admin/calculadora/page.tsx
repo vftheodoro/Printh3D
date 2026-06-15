@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calculator as CalcIcon, Plus, Save, Printer, DollarSign, Package, ShoppingCart } from 'lucide-react';
+import { Calculator as CalcIcon, Save, DollarSign, ShoppingCart } from 'lucide-react';
 
 interface SettingsData {
   margem_padrao: number;

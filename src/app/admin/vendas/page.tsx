@@ -1,56 +1,29 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Wallet, Plus, Edit2, Trash2, Search, CheckCircle, AlertTriangle, User, Calendar, Save } from 'lucide-react';
-
-interface Sale {
-  id: number;
-  data_venda: string;
-  cliente_id?: number | null;
-  cliente: string;
-  item_nome: string;
-  product_id?: number | null;
-  cupom_id?: number | null;
-  desconto_percentual?: number;
-  valor_venda: number;
-  valor_devido: number;
-  tipo_pagamento: string;
-  vendedor?: { nome: string };
-  observacoes: string;
-}
-
-interface ProductOption {
-  id: number;
-  nome: string;
-  preco_venda: number;
-  custo_total?: number;
-}
-
-interface CouponOption {
-  id: number;
-  codigo: string;
-  tipo_desconto: 'percentual' | 'fixo';
-  valor_desconto: number;
-  ativo: boolean;
-  data_validade?: string | null;
-}
-
-interface ClientOption {
-  id: number;
-  nome: string;
-  whatsapp?: string;
-  email?: string;
-}
+import {
+  getApiErrorMessage,
+  getUnknownErrorMessage,
+} from '@/lib/client-api';
+import type {
+  AdminSale,
+  CategoryOption,
+  ClientOption,
+  CouponOption,
+  ProductOption,
+  SaleFormData,
+} from '@/modules/sales/admin/types';
 
 export default function SalesPage() {
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [sales, setSales] = useState<AdminSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all, paid, pending
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [coupons, setCoupons] = useState<CouponOption[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const [categorias, setCategorias] = useState<any[]>([]);
+  const [categorias, setCategorias] = useState<CategoryOption[]>([]);
   const [productQuery, setProductQuery] = useState('');
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
@@ -61,11 +34,11 @@ export default function SalesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   
-  const initialForm = {
+  const initialForm: SaleFormData = {
     cliente: '', cliente_id: '', item_nome: '', product_id: '', cupom_id: '', categoria_nome: '', desconto_percentual: 0, valor_venda: 0, valor_devido: 0, custo_unitario: 0,
     tipo_pagamento: 'PIX', parcelas: 1, quantidade: 1, preco_unitario: 0, observacoes: '', data_venda: new Date().toISOString().slice(0, 16)
   };
-  const [formData, setFormData] = useState<any>(initialForm);
+  const [formData, setFormData] = useState<SaleFormData>(initialForm);
 
   const normalizeText = (value: string) => value
     .toLowerCase()
@@ -112,10 +85,6 @@ export default function SalesPage() {
   }, [clients, formData.cliente]);
 
   useEffect(() => {
-    loadSales();
-  }, [search, statusFilter]);
-
-  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'newSale') {
       const nome = params.get('nome') || '';
@@ -123,7 +92,7 @@ export default function SalesPage() {
       const preco = Number(params.get('preco')) || 0;
       
       setFormData({
-        cliente: '', cliente_id: '', product_id: '', cupom_id: '', desconto_percentual: 0, valor_devido: 0,
+        cliente: '', cliente_id: '', product_id: '', cupom_id: '', categoria_nome: '', desconto_percentual: 0, valor_devido: 0,
         tipo_pagamento: 'PIX', parcelas: 1, quantidade: 1, observacoes: '', data_venda: new Date().toISOString().slice(0, 16),
         item_nome: nome,
         custo_unitario: custo,
@@ -173,7 +142,7 @@ export default function SalesPage() {
     }
   };
 
-  const loadSales = async () => {
+  const loadSales = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/sales?search=${search}&status=${statusFilter}`);
@@ -184,9 +153,13 @@ export default function SalesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, statusFilter]);
 
-  const openModal = async (sale?: Sale) => {
+  useEffect(() => {
+    void loadSales();
+  }, [loadSales]);
+
+  const openModal = async (sale?: AdminSale) => {
     if (sale) {
       let cleanItemName = String(sale.item_nome || '');
       let parsedQuantity = 1;
@@ -215,9 +188,11 @@ export default function SalesPage() {
         cliente_id: sale.cliente_id || '',
         product_id: sale.product_id || '',
         cupom_id: sale.cupom_id || '',
+        desconto_percentual: sale.desconto_percentual || 0,
         quantidade: parsedQuantity,
         preco_unitario: unitPrice,
         custo_unitario: 0,
+        parcelas: sale.parcelas || 1,
         data_venda: new Date(sale.data_venda).toISOString().slice(0, 16)
       });
       setProductQuery(sale.item_nome || '');
@@ -236,7 +211,7 @@ export default function SalesPage() {
   };
 
   const selectClient = (client: ClientOption) => {
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev,
       cliente: client.nome,
       cliente_id: client.id
@@ -275,7 +250,7 @@ export default function SalesPage() {
   const handleProductChange = (productId: string) => {
     const product = products.find(p => p.id === Number(productId));
     if (!product) {
-      setFormData((prev: any) => ({
+      setFormData((prev) => ({
         ...prev,
         product_id: '',
         item_nome: '',
@@ -291,7 +266,7 @@ export default function SalesPage() {
     const quantity = Math.max(1, Number(formData.quantidade) || 1);
     const baseValue = (Number(product.preco_venda) || 0) * quantity;
     const next = applyCouponPreview(baseValue, formData.cupom_id);
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev,
       product_id: product.id,
       item_nome: product.nome,
@@ -310,7 +285,7 @@ export default function SalesPage() {
     const baseValue = unitPrice * quantity;
     const next = applyCouponPreview(baseValue, formData.cupom_id);
 
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev,
       quantidade: quantity,
       valor_venda: next.valor_venda,
@@ -325,7 +300,7 @@ export default function SalesPage() {
     const baseValue = unitPrice * quantity;
     const next = couponId ? applyCouponPreview(baseValue, couponId) : { valor_venda: baseValue, desconto_percentual: 0 };
 
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev,
       cupom_id: couponId ? Number(couponId) : '',
       valor_venda: next.valor_venda,
@@ -371,12 +346,16 @@ export default function SalesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error((await res.json()).error);
+      if (!res.ok) {
+        throw new Error(
+          getApiErrorMessage(await res.json(), 'Erro ao salvar venda.'),
+        );
+      }
       
       closeModal();
       loadSales();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (error: unknown) {
+      alert(getUnknownErrorMessage(error, 'Erro ao salvar venda.'));
     } finally {
       setIsSaving(false);
     }
@@ -387,10 +366,14 @@ export default function SalesPage() {
     setIsDeletingId(id);
     try {
       const res = await fetch(`/api/admin/sales/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error((await res.json()).error);
+      if (!res.ok) {
+        throw new Error(
+          getApiErrorMessage(await res.json(), 'Erro ao excluir venda.'),
+        );
+      }
       loadSales();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (error: unknown) {
+      alert(getUnknownErrorMessage(error, 'Erro ao excluir venda.'));
     } finally {
       setIsDeletingId(null);
     }
@@ -426,7 +409,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="table-container">
+      <div className="table-container sales-table-shell">
         <table>
           <thead>
             <tr>
@@ -453,7 +436,7 @@ export default function SalesPage() {
                   <td className="hide-mobile">
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>#{sale.id}</span>
                   </td>
-                  <td>
+                  <td data-label="Cliente / Data">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <div className="hide-mobile" style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
                         <User size={12} />
@@ -467,14 +450,14 @@ export default function SalesPage() {
                       </div>
                     </div>
                   </td>
-                  <td style={{ fontSize: '0.85rem' }}>{sale.item_nome}</td>
-                  <td className="hide-tablet"><span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{sale.vendedor?.nome || 'Sistema'}</span></td>
-                  <td className="hide-tablet">
+                  <td data-label="Pedido" style={{ fontSize: '0.85rem' }}>{sale.item_nome}</td>
+                  <td className="hide-tablet" data-label="Vendedor"><span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{sale.vendedor?.nome || 'Sistema'}</span></td>
+                  <td className="hide-tablet" data-label="Pagamento">
                     <span className="status-badge badge-neutral">
                       {sale.tipo_pagamento}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Valor">
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <strong style={{ fontSize: '0.85rem' }}>{formatMoney(sale.valor_venda)}</strong>
                       {isPending && (
@@ -484,7 +467,7 @@ export default function SalesPage() {
                       )}
                     </div>
                   </td>
-                  <td className="hide-mobile">
+                  <td className="hide-mobile" data-label="Status">
                     {isPending ? (
                       <span className="status-badge badge-warning">
                         <AlertTriangle size={12}/> Pendente
@@ -495,7 +478,7 @@ export default function SalesPage() {
                       </span>
                     )}
                   </td>
-                  <td style={{ textAlign: 'right' }}>
+                  <td data-label="Ações" style={{ textAlign: 'right' }}>
                     <div className="action-btns">
                       <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => openModal(sale)} disabled={isDeletingId === sale.id}><Edit2 size={14} /></button>
                       <button className="btn btn-danger-ghost" style={{ padding: '0.4rem' }} onClick={() => handleDelete(sale.id)} disabled={isDeletingId === sale.id}>
@@ -572,7 +555,7 @@ export default function SalesPage() {
                             setShowProductSuggestions(true);
 
                             if (!value.trim()) {
-                              setFormData((prev: any) => ({
+                              setFormData((prev) => ({
                                 ...prev,
                                 product_id: '',
                                 item_nome: '',
@@ -581,7 +564,7 @@ export default function SalesPage() {
                                 desconto_percentual: 0
                               }));
                             } else {
-                              setFormData((prev: any) => ({ ...prev, item_nome: value, product_id: '' }));
+                              setFormData((prev) => ({ ...prev, item_nome: value, product_id: '' }));
                             }
                           }}
                         />
