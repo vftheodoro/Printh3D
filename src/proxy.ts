@@ -52,6 +52,33 @@ function isSameOriginMutation(request: NextRequest) {
   return !origin || origin === request.nextUrl.origin;
 }
 
+async function validateDatabaseSession(
+  userId: string,
+  role: AdminRole,
+): Promise<boolean> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey || !/^\d+$/.test(userId)) return false;
+
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/admin_users?id=eq.${encodeURIComponent(userId)}&select=id,tipo&limit=1`,
+    {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) return false;
+
+  const users = (await response.json()) as Array<{
+    id?: number;
+    tipo?: string;
+  }>;
+  return users.length === 1 && users[0].tipo === role;
+}
+
 function unauthorized(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
     return NextResponse.json(
@@ -115,14 +142,18 @@ export async function proxy(request: NextRequest) {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
     const role = payload.role;
+    const userId = String(payload.sub ?? "");
 
     if (!isAdminRole(role)) return unauthorized(request);
+    if (!(await validateDatabaseSession(userId, role))) {
+      return unauthorized(request);
+    }
     if (isAdminOnlyPath(pathname) && role !== "ADMIN") {
       return forbidden(request);
     }
 
     const requestHeaders = new Headers(request.headers);
-    requestHeaders.set("x-admin-user-id", String(payload.sub ?? ""));
+    requestHeaders.set("x-admin-user-id", userId);
     requestHeaders.set("x-admin-role", role satisfies AdminRole);
     requestHeaders.set("x-request-id", requestId);
 

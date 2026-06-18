@@ -46,14 +46,12 @@ export async function POST(request: Request) {
 
     const { data: category } = await supabase.from('categories').select('prefixo').eq('id', insertPayload.category_id).single();
     
-    // Auto-generate SKU if omitted
+    // Generate collision-resistant SKUs without relying on count/max queries.
     let finalSku = insertPayload.codigo_sku;
     if (!finalSku && category) {
-      const { count } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('category_id', insertPayload.category_id);
-      const nextNum = (count || 0) + 1;
-      finalSku = `${category.prefixo}-${nextNum.toString().padStart(4, '0')}`;
+      finalSku = `${category.prefixo}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     } else if (!finalSku) {
-      finalSku = `PRD-${Date.now().toString().slice(-6)}`;
+      finalSku = `PRD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     }
 
     const baseInsertPayload = {

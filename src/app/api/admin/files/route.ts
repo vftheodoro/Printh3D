@@ -135,8 +135,12 @@ function hasValidSignature(extension: string, buffer: Buffer) {
   return buffer.length > 0;
 }
 
-function getStorageBucket() {
+function getPublicStorageBucket() {
   return process.env.SUPABASE_STORAGE_BUCKET || "printh3d-files";
+}
+
+function getPrivateStorageBucket() {
+  return process.env.SUPABASE_PRIVATE_STORAGE_BUCKET || "printh3d-private";
 }
 
 export async function GET(request: Request) {
@@ -160,7 +164,28 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json(Array.isArray(data) ? data : []);
+
+    const records = Array.isArray(data) ? data : [];
+    const resolvedRecords = await Promise.all(
+      records.map(async (record) => {
+        if (record.is_public !== false) return record;
+
+        const bucket = record.storage_bucket || getPrivateStorageBucket();
+        const objectPath =
+          record.storage_object_path || record.storage_path || null;
+        if (!objectPath) return record;
+
+        const { data: signed } = await supabase.storage
+          .from(bucket)
+          .createSignedUrl(objectPath, 10 * 60);
+
+        return signed?.signedUrl
+          ? { ...record, storage_path: signed.signedUrl }
+          : record;
+      }),
+    );
+
+    return NextResponse.json(resolvedRecords);
   } catch (error: unknown) {
     logger.error("Failed to list files.", {
       action: "files.list",
@@ -177,6 +202,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   let uploadedStoragePath: string | null = null;
+  let uploadedBucket: string | null = null;
 
   try {
     const formData = await request.formData();
@@ -249,7 +275,11 @@ export async function POST(request: Request) {
     const uniqueName = `${crypto.randomUUID()}.${extension}`;
     const storagePath = `${entity}s/${entityId}/${uniqueName}`;
     uploadedStoragePath = storagePath;
-    const bucket = getStorageBucket();
+    const isPublic = entity === "product" && rule.category === "image";
+    const bucket = isPublic
+      ? getPublicStorageBucket()
+      : getPrivateStorageBucket();
+    uploadedBucket = bucket;
     const { error: uploadError } = await supabase.storage
       .from(bucket)
       .upload(storagePath, fileBuffer, {
@@ -260,16 +290,19 @@ export async function POST(request: Request) {
 
     if (uploadError) throw uploadError;
 
-    const publicUrl = supabase.storage
-      .from(bucket)
-      .getPublicUrl(storagePath).data.publicUrl;
+    const canonicalStoragePath = isPublic
+      ? supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl
+      : storagePath;
 
     const payload: Record<string, unknown> = {
       nome_arquivo: file.name,
-      tipo: rule.category === "model" ? "other" : rule.category,
+      tipo: rule.category === "model" ? "model3d" : rule.category,
       mime_type: mimeType,
       tamanho_bytes: file.size,
-      storage_path: publicUrl,
+      storage_path: canonicalStoragePath,
+      storage_bucket: bucket,
+      storage_object_path: storagePath,
+      is_public: isPublic,
       [config.ownerColumn]: entityId,
     };
 
@@ -292,10 +325,10 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(data, { status: 201 });
   } catch (error: unknown) {
-    if (uploadedStoragePath) {
+    if (uploadedStoragePath && uploadedBucket) {
       const supabase = getAdminSupabase();
       await supabase.storage
-        .from(getStorageBucket())
+        .from(uploadedBucket)
         .remove([uploadedStoragePath]);
     }
 

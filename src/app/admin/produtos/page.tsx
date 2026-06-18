@@ -459,13 +459,17 @@ export default function ProductsPage() {
                 <td data-label="Foto">
                   {/* ... (image logic) ... */}
                   {(() => {
-                    const ownFiles = prod.product_files ?? [];
+                    const ownFiles = (prod.product_files ?? []).filter(
+                      (file) => file.tipo === 'image',
+                    );
                     const thumbFile = ownFiles.length > 0
                       ? (ownFiles.find(f => f.id === prod.cover_file_id) || ownFiles[0])
                       : (prod.is_variation && prod.parent_product_id
                           ? (() => {
                               const parent = allProducts.find(p => p.id === prod.parent_product_id);
-                              const pFiles = parent?.product_files ?? [];
+                              const pFiles = (parent?.product_files ?? []).filter(
+                                (file) => file.tipo === 'image',
+                              );
                               return pFiles.length > 0 ? (pFiles.find(f => f.id === parent?.cover_file_id) || pFiles[0]) : null;
                             })()
                           : null);

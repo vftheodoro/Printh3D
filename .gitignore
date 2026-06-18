@@ -15,7 +15,7 @@
 /artifacts
 
 # local tooling
-/.codex-dev.*.log
+/.codex-*.log
 /supabase/.temp/
 
 # next.js
