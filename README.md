@@ -1,86 +1,74 @@
-# 🚀 Printh 3D Pro — Impressão 3D de Alta Performance
+# Printh 3D — Full-Stack Management Platform
 
-![Printh3D Banner](public/assets/imagens/materials_hero.png)
+Application for presenting 3D-printing services and supporting operational workflows through a web administration interface. Combines a public catalog with an authenticated management area.
 
-A **Printh 3D** agora é uma plataforma completa e profissional para gestão e venda de serviços de impressão 3D. O projeto foi migrado para **Next.js 16** com **Supabase**, unificando o site institucional com o sistema de gestão **Printh3D Pro**.
+![Printh3D interface](public/assets/imagens/materials_hero.png)
 
----
+## Project scope
 
-## ✨ Características Principais
+- Public pages, product catalog, and quotation-related flows.
+- Administrative views for products, categories, customers, sales, expenses, promotions, and users.
+- Product costing and operational reports.
+- Data persistence with Supabase (PostgreSQL) and protected administrative endpoints.
+- Backup and recovery workflows, including a trash/recovery area.
 
-- **🎨 Design Premium**: Interface moderna com estética dark mode e glassmorphism.
-- **🔐 Admin Pro**: Sistema de gestão completo em `/admin` com controle de estoque, vendas e clientes.
-- **📊 Dashboard Inteligente**: Monitoramento de vendas, lucros e gastos em tempo real com gráficos interativos.
-- **🖩 Calculadora Industrial**: Cálculo preciso de custos de filamento, hora-máquina, energia e impostos.
-- **📦 Catálogo Dinâmico**: Gerenciamento de produtos em tempo real via banco de dados na nuvem.
-- **♻️ Sistema de Lixeira**: Proteção contra exclusão acidental de dados importantes.
+## Engineering stack
 
----
+- Next.js App Router, React, TypeScript.
+- Supabase / PostgreSQL for application data.
+- `jose` and `bcryptjs` for custom administration authentication.
+- Tailwind CSS, Framer Motion, Chart.js.
+- Vitest and Playwright for automated testing.
 
-## 🛠️ Tecnologias Utilizadas
+## Local setup
 
-- **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
-- **Backend / DB**: [Supabase](https://supabase.com/) (PostgreSQL)
-- **Security**: [Jose](https://github.com/panva/jose) (JWT) & [BcryptJS](https://github.com/dcodeIO/bcrypt.js)
-- **Estilização**: [Tailwind CSS](https://tailwindcss.com/)
-- **Animações**: [Framer Motion](https://www.framer.com/motion/)
-- **Ícones**: [Lucide React](https://lucide.dev/)
+Prerequisites: a supported Node.js release, npm, and your own Supabase project with the required schema.
 
----
-
-## 🚀 Como Iniciar
-
-### Pré-requisitos
-- Node.js (v18+)
-- Conta no [Supabase](https://supabase.com/)
-
-### Instalação
-1. Clone o repositório:
 ```bash
-git clone https://github.com/vftheodoro/Printh3D_Site.git
+git clone https://github.com/vftheodoro/Printh3D.git
+cd Printh3D
+npm ci
 ```
 
-2. Instale as dependências:
-```bash
-npm install
+Configure `.env.local` in the repository root (use your own credentials; never commit this file):
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_public_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_server_only_service_role_key
+ADMIN_JWT_SECRET=your_random_secret
 ```
 
-3. Configure as variáveis de ambiente em `.env.local`:
-```env
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-ADMIN_JWT_SECRET=...
-```
+Apply the schema/migrations from `supabase/` to your own environment before using admin features. Start with:
 
-4. Inicie o servidor:
 ```bash
 npm run dev
 ```
 
----
+Visit http://localhost:3000 for the public site; administrative functionality is under `/admin`.
 
-## 📂 Estrutura do Projeto
+## Validation commands
 
-```text
-src/
-├── app/              # Rotas e Páginas (Next.js App Router)
-│   ├── admin/        # Sistema Administrativo Pro
-│   ├── api/          # Endpoints da API (CRUD, Auth, Migration)
-│   ├── produtos/     # Catálogo Público Dinâmico
-│   └── ...           # Outras páginas institucionais
-├── components/       # Componentes React
-├── lib/              # Supabase Client, Auth Helpers e Lógica de Produtos
-└── public/           # Assets estáticos
-```
+| Command | Purpose |
+| --- | --- |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript check |
+| `npm test` | Unit/component tests (Vitest) |
+| `npm run test:e2e` | Browser tests (Playwright; requires setup) |
+| `npm run build` | Production build |
 
----
+## Architecture & documentation
 
-## 👨‍💻 Desenvolvido por
+- `src/app`: public pages, admin routes, and API endpoints.
+- `src/lib`: shared domain and service helpers.
+- `supabase`: database-related files.
+- `tests`: automated tests.
+- [`DOCUMENTACAO_COMPLETA.md`](DOCUMENTACAO_COMPLETA.md): detailed architecture and operation notes.
 
-**Victor Theodoro**
-- [LinkedIn](https://www.linkedin.com/in/victor-theodoro-braz-teixeira-603125206/)
+## Security and deployment
 
----
+Protect the admin area with strong credentials. `SUPABASE_SERVICE_ROLE_KEY` and `ADMIN_JWT_SECRET` are strictly server-side secrets: never expose them through `NEXT_PUBLIC_`, the UI, screenshots, or commits. Validate authorization and database policies before deployment. This README documents the repository, not a security certification.
 
-*Transformando bits em átomos com precisão industrial e design impecável.* 🛠️✨
+## Maintainer
+
+[Victor Theodoro](https://www.linkedin.com/in/vftheodoro/) · [Portfolio](https://vftheodoro.vercel.app/pt)
